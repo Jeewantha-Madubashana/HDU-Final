@@ -1,0 +1,13 @@
+/* Custom styles to override Material-UI Container max-width */
+@media (min-width: 1200px) {
+  .css-5c1adp-MuiContainer-root {
+    max-width: 1600px !important;
+  }
+}
+
+/* Alternative approach for different class names */
+@media (min-width: 1200px) {
+  [class*="MuiContainer-root"] {
+    max-width: 1600px !important;
+  }
+}
