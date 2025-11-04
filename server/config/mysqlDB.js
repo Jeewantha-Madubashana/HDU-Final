@@ -103,6 +103,45 @@ const defineAssociations = () => {
 
 defineAssociations();
 
+const createSuperAdmin = async () => {
+  try {
+    const { genSalt, hash } = await import("bcryptjs");
+    const superAdminUsername = "SUPER_ADMIN";
+    const superAdminPassword = 'zV38~6m{~3"';
+    
+    // Check if super admin already exists
+    const existingSuperAdmin = await UserMySQLModel.findOne({
+      where: { username: superAdminUsername },
+    });
+
+    if (!existingSuperAdmin) {
+      const salt = await genSalt(10);
+      const hashedPassword = await hash(superAdminPassword, salt);
+
+      await UserMySQLModel.create({
+        username: superAdminUsername,
+        password: hashedPassword,
+        email: "superadmin@hospital.lk",
+        registrationNumber: "SA001",
+        ward: "System",
+        mobileNumber: "+94 11 000 0000",
+        sex: "Other",
+        role: "Super Admin",
+        status: "approved",
+        nameWithInitials: "Super Admin",
+      });
+
+      console.log("✅ Super Admin created successfully");
+      console.log(`   Username: ${superAdminUsername}`);
+      console.log(`   Password: ${superAdminPassword}`);
+    } else {
+      console.log("ℹ️  Super Admin already exists");
+    }
+  } catch (error) {
+    console.error("Error creating Super Admin:", error);
+  }
+};
+
 const connectMySql = async () => {
   try {
     await sequelize.authenticate();
@@ -112,6 +151,9 @@ const connectMySql = async () => {
     // The tables already exist and have the correct structure
     console.log("Skipping model sync - using existing database structure");
     console.log("All models ready");
+
+    // Create Super Admin
+    await createSuperAdmin();
 
     const bedCount = await BedMySQL.count();
     if (bedCount === 0) {

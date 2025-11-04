@@ -34,10 +34,13 @@ export const useAuth = () => {
     try {
       dispatch(setLoading(true));
       const response = await authApi.register(formData);
-      dispatch(setCredentials(response));
+      // Only set credentials if user is approved (has token)
+      if (response.token) {
+        dispatch(setCredentials(response));
+      }
       return response;
     } catch (err) {
-      dispatch(setError(err.response?.data?.message || "Registration failed"));
+      dispatch(setError(err.response?.data?.msg || err.response?.data?.message || "Registration failed"));
       throw err;
     } finally {
       dispatch(setLoading(false));

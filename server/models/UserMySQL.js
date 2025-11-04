@@ -17,12 +17,18 @@ const defineUser = (sequelize) => {
       },
       role: {
         type: DataTypes.ENUM(
+          "Super Admin",
           "House Officer",
           "Medical Officer",
           "Nurse",
           "Consultant"
         ),
         allowNull: false,
+      },
+      status: {
+        type: DataTypes.ENUM("pending", "approved", "rejected"),
+        allowNull: false,
+        defaultValue: "pending",
       },
       nameWithInitials: { type: DataTypes.STRING, allowNull: true },
       speciality: { type: DataTypes.STRING, allowNull: true },

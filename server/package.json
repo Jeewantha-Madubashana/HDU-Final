@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "init-db": "node scripts/initializeDatabase.js",
-    "flush-db": "node scripts/flushAllTables.js"
+    "flush-db": "node scripts/flushAllTables.js",
+    "migrate-db": "node scripts/addStatusColumn.js",
+    "create-super-admin": "node scripts/createSuperAdmin.js"
   },
   "keywords": [],
   "author": "",
