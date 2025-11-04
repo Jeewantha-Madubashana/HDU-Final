@@ -70,16 +70,27 @@ export const useRegistrationForm = () => {
     validationSchema,
     onSubmit: async (values) => {
       try {
-        await register(values);
-        dispatch(
-          showToast({ message: "Registration successful", type: "success" })
-        );
+        const response = await register(values);
+        // Check if registration requires approval
+        if (response?.requiresApproval || response?.status === "pending") {
+          dispatch(
+            showToast({ 
+              message: response?.msg || "Registration successful. Your account is pending approval by Super Admin.",
+              type: "info",
+            })
+          );
+        } else {
+          dispatch(
+            showToast({ message: "Registration successful", type: "success" })
+          );
+        }
         navigate("/login");
       } catch (err) {
         console.error(err);
+        const errorMessage = err.response?.data?.msg || err.response?.data?.message || "Registration failed. Please try again.";
         dispatch(
           showToast({
-            message: "Registration failed. Please try again.",
+            message: errorMessage,
             type: "error",
           })
         );
