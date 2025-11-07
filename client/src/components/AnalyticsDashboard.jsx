@@ -17,6 +17,7 @@ import {
   TableRow,
   IconButton,
   Tooltip,
+  Button,
 } from "@mui/material";
 import {
   TrendingUp as TrendingUpIcon,
@@ -29,6 +30,7 @@ import {
   LocalHospital as HospitalIcon,
   Assignment as AssignmentIcon,
   Timeline as TimelineIcon,
+  Visibility as VisibilityIcon,
 } from "@mui/icons-material";
 import { useSelector } from "react-redux";
 import axios from "axios";
@@ -38,6 +40,7 @@ import { getAverageLengthOfStay } from "../api/patientApi";
 import { clearCredentials } from "../features/auth/authSlice";
 import { useNavigate } from "react-router-dom";
 import CriticalAlertsAnalytics from "./CriticalAlertsAnalytics";
+import PatientDetailsDialog from "./PatientDetailsDialog";
 
 // Mock data for charts (in a real app, this would come from the API)
 const mockVitalSignsData = {
@@ -61,6 +64,10 @@ const mockPatientDemographics = {
 
 const AnalyticsDashboard = () => {
   const [loading, setLoading] = useState(false);
+  const [beds, setBeds] = useState([]);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [selectedBedNumber, setSelectedBedNumber] = useState(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [analyticsData, setAnalyticsData] = useState({
     bedOccupancy: 0,
     totalPatients: 0,
@@ -169,11 +176,14 @@ const AnalyticsDashboard = () => {
       }
 
       // Calculate analytics
-      const beds = bedsResponse.data;
-      const occupiedBeds = beds.filter(bed => bed.patientId !== null).length;
-      const totalBeds = beds.length;
+      const bedsData = bedsResponse.data;
+      const occupiedBeds = bedsData.filter(bed => bed.patientId !== null).length;
+      const totalBeds = bedsData.length;
       const availableBeds = totalBeds - occupiedBeds;
       const bedOccupancy = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+
+      // Store beds data for table
+      setBeds(bedsData);
 
       setAnalyticsData({
         bedOccupancy: Math.round(bedOccupancy),
@@ -417,6 +427,130 @@ const AnalyticsDashboard = () => {
     </Card>
   );
 
+  const handlePatientClick = (patient, bedNumber) => {
+    if (!patient) {
+      console.error("No patient data provided");
+      return;
+    }
+    console.log("Opening patient details for:", patient.fullName, "Bed:", bedNumber);
+    setSelectedPatient(patient);
+    setSelectedBedNumber(bedNumber);
+    setDialogOpen(true);
+  };
+
+  const PatientsTable = () => {
+    const occupiedBeds = beds.filter(bed => bed.patientId !== null && bed.Patient);
+
+    if (occupiedBeds.length === 0) {
+      return (
+        <Card sx={{ height: "100%" }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Patients in Beds
+            </Typography>
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No patients currently assigned to beds.
+            </Alert>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <Card sx={{ height: "100%" }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Patients in Beds ({occupiedBeds.length})
+          </Typography>
+          <TableContainer component={Paper} sx={{ mt: 2, maxHeight: 600 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Bed Number</strong></TableCell>
+                  <TableCell><strong>Patient ID</strong></TableCell>
+                  <TableCell><strong>Full Name</strong></TableCell>
+                  <TableCell><strong>Gender</strong></TableCell>
+                  <TableCell><strong>Age</strong></TableCell>
+                  <TableCell><strong>Contact Number</strong></TableCell>
+                  <TableCell><strong>Department</strong></TableCell>
+                  <TableCell><strong>Consultant</strong></TableCell>
+                  <TableCell><strong>Admission Date</strong></TableCell>
+                  <TableCell><strong>Action</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {occupiedBeds.map((bed) => {
+                  const patient = bed.Patient;
+                  if (!patient) return null;
+                  
+                  return (
+                    <TableRow
+                      key={bed.id}
+                      sx={{
+                        cursor: "pointer",
+                        "&:hover": {
+                          backgroundColor: "action.hover",
+                        },
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log("Row clicked for patient:", patient.fullName);
+                        handlePatientClick(patient, bed.bedNumber);
+                      }}
+                    >
+                      <TableCell>
+                        <Chip
+                          label={bed.bedNumber}
+                          color="primary"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{patient.patientNumber || "N/A"}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {patient.fullName || "N/A"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{patient.gender || "N/A"}</TableCell>
+                      <TableCell>{patient.age || "N/A"}</TableCell>
+                      <TableCell>{patient.contactNumber || "N/A"}</TableCell>
+                      <TableCell>{patient.department || "N/A"}</TableCell>
+                      <TableCell>{patient.consultantInCharge || "N/A"}</TableCell>
+                      <TableCell>
+                        {patient.admissionDateTime
+                          ? new Date(patient.admissionDateTime).toLocaleDateString()
+                          : "N/A"}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          startIcon={<VisibilityIcon />}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handlePatientClick(patient, bed.bedNumber);
+                          }}
+                          sx={{
+                            fontWeight: 600,
+                          }}
+                        >
+                          View Full Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -523,10 +657,10 @@ const AnalyticsDashboard = () => {
           <VitalSignsTable />
         </Grid>
 
-
-
-
-
+        {/* Patients in Beds Table */}
+        <Grid item xs={12}>
+          <PatientsTable />
+        </Grid>
 
         {/* Critical Alerts Analytics Section */}
         <Grid item xs={12}>
@@ -535,6 +669,18 @@ const AnalyticsDashboard = () => {
           </Box>
         </Grid>
       </Grid>
+
+      {/* Patient Details Dialog */}
+      <PatientDetailsDialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+          setSelectedPatient(null);
+          setSelectedBedNumber(null);
+        }}
+        patient={selectedPatient}
+        bedNumber={selectedBedNumber}
+      />
     </Box>
   );
 };
