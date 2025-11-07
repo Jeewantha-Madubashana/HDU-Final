@@ -153,14 +153,9 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     );
   };
   const processDocumentUploads = async (patientId, fileData) => {
-    console.log("📤 processDocumentUploads called with:", { patientId, fileData });
-    
     if (!hasDocuments(fileData)) {
-      console.log("📭 No documents to upload, returning early");
       return;
     }
-
-    console.log("📤 Starting document upload process...");
     setUploadStatus("uploading");
     dispatch(setLoading(true));
     try {
@@ -209,20 +204,16 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         });
       }
 
-      console.log("Uploading documents for patient:", patientId);
-
       if (!hasFiles) {
-        console.log("No files to upload, skipping API call");
         setUploadStatus("success");
         dispatch(setLoading(false));
         return;
       }
 
-      const response = await uploadPatientDocuments(
+      await uploadPatientDocuments(
         patientId,
         formData
       );
-      console.log("Document upload response:", response);
       setUploadStatus("success");
     } catch (error) {
       console.error("Document upload error:", error);
@@ -308,40 +299,23 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
                 const normalizedData = normalizeFormData(values);
                 const patientResponse = await handleSubmit(normalizedData);
 
-                // Debug logging for document upload
-                console.log("📁 File data for upload:", fileData);
-                console.log("📋 Has documents?", hasDocuments(fileData));
-                console.log("👤 Patient response:", patientResponse);
-
                 if (
                   patientResponse &&
                   patientResponse.patientId &&
                   hasDocuments(fileData)
                 ) {
-                  console.log(
-                    "✅ Patient created with ID:",
-                    patientResponse.patientId
-                  );
-                  console.log("🚀 Starting document upload process...");
                   await processDocumentUploads(
                     patientResponse.patientId,
                     fileData
                   );
-                } else {
-                  console.log(
-                    "⚠️ Patient created, but no documents to upload or invalid response:",
+                } else if (!patientResponse?.patientId) {
+                  console.error(
+                    "Missing patient ID in response:",
                     patientResponse
                   );
-                  if (!patientResponse?.patientId) {
-                    console.error(
-                      "Missing patient ID in response:",
-                      patientResponse
-                    );
-                  }
                 }
 
                 // Clear form data after successful submission
-                console.log("🧹 Clearing form data after successful submission...");
                 resetForm();
                 dispatch(updateFormData({})); // Clear Redux form data
                 setGeneratedPatientId(null); // Clear generated patient ID

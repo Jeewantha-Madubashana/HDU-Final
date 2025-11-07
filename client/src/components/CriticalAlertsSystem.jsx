@@ -252,8 +252,6 @@ const CriticalAlertsSystem = () => {
 
   const handleAcknowledgeAlert = async (alert) => {
     try {
-      console.log("Acknowledging alert:", alert);
-      
       // Prepare alert data based on alert type
       const alertData = {
         alertId: alert.id,
@@ -268,8 +266,6 @@ const CriticalAlertsSystem = () => {
       if (alert.bedNumber) {
         alertData.bedNumber = alert.bedNumber;
       }
-
-      console.log("Sending alert data:", alertData);
 
       // Call the API to acknowledge the alert
       await acknowledgeAlert(alertData);

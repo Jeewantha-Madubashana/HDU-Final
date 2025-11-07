@@ -43,7 +43,6 @@ const NurseDashboard = () => {
   useEffect(() => {
     dispatch(setAppBarTitle("Nurse Dashboard - Bed Management"));
     if (!token) {
-      console.log("No token found, redirecting to login");
       navigate("/login");
       return;
     }
@@ -72,7 +71,6 @@ const NurseDashboard = () => {
   // They cannot assign or discharge patients
   const handleViewPatientDetails = (bed) => {
     // This will be handled by the BedCard component's click functionality
-    console.log("View patient details for bed:", bed.bedNumber);
   };
 
   const closeLogoutDialog = () => {

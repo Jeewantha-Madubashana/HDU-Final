@@ -197,26 +197,16 @@ export const getCriticalFactorsByPatientId = async (req, res) => {
 };
 
 export const updateCriticalFactors = async (req, res) => {
-  console.log(
-    "[DEBUG] updateCriticalFactors called for id:",
-    req.params.criticalFactorId
-  );
   const t = await sequelize.transaction();
   try {
     const { criticalFactorId } = req.params;
-    console.log(
-      "[DEBUG] Looking for CriticalFactor with id:",
-      criticalFactorId
-    );
 
     let factor = await CriticalFactor.findByPk(criticalFactorId, {
       transaction: t,
     });
-    console.log("[DEBUG] factor found with transaction:", factor);
 
     if (!factor) {
       factor = await CriticalFactor.findByPk(criticalFactorId);
-      console.log("[DEBUG] factor found without transaction:", factor);
     }
     const { amendmentReason, ...updatedData } = req.body;
     const userId = req.user.id;

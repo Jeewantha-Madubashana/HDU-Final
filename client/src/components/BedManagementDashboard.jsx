@@ -176,7 +176,6 @@ const BedManagementDashboard = () => {
 
   const handleAssignBed = (bed) => {
     // This will be handled by the parent component
-    console.log("Assign bed:", bed);
   };
 
   const handleDeassignBed = async (bed) => {

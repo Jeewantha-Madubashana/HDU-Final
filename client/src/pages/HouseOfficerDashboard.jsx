@@ -44,7 +44,6 @@ const HouseOfficerDashboard = () => {
   useEffect(() => {
     dispatch(setAppBarTitle("House Officer Dashboard - Bed Management"));
     if (!token) {
-      console.log("No token found, redirecting to login");
       navigate("/login");
       return;
     }

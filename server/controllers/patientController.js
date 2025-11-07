@@ -378,7 +378,6 @@ export async function dischargePatient(req, res) {
         const bed = await BedMySQL.findOne({ where: { id: bedId } });
         if (bed) {
           await bed.update({ patientId: null });
-          console.log(`Bed ${bedId} deassigned successfully`);
         }
       } catch (error) {
         console.warn("Could not deassign bed:", error.message);
@@ -386,8 +385,6 @@ export async function dischargePatient(req, res) {
     }
 
     // Create discharge record in database (you might need to create a Discharge model)
-    // For now, we'll log it and return success
-    console.log("Discharge Record:", dischargeRecord);
 
     res.json({
       msg: "Patient discharged successfully",

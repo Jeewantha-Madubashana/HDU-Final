@@ -331,10 +331,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
   // Handle toggle between create and update modes
   const handleModeToggle = (event) => {
     setIsUpdateMode(event.target.checked);
-    console.log(
-      "[DEBUG] handleModeToggle called. New isUpdateMode:",
-      event.target.checked
-    );
     if (event.target.checked && latestRecord) {
       // Populate form with latest values for update
       const formValues = { ...initialFormState };

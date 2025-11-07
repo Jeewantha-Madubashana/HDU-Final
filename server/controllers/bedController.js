@@ -110,7 +110,6 @@ export async function getBeds(req, res) {
       return bedData;
     });
     
-    console.log("Beds with patients:", JSON.stringify(bedsWithPatients, null, 2));
     res.json(bedsWithPatients);
   } catch (err) {
     console.error("Error in getBeds:", err);
@@ -423,7 +422,6 @@ export async function assignBed(req, res) {
       let result;
       if (existingPatient) {
         // Use existing patient
-        console.log("Using existing patient with NIC:", patientData.nicPassport);
         result = await patientRepository.createAdmissionForExistingPatient(existingPatient.id, patientData);
       } else {
         // Create new patient
@@ -485,8 +483,6 @@ export async function deAssignBed(req, res) {
           where: { patientId: bed.patientId }
         });
 
-        console.log(`Found ${patientDocuments.length} documents for patient ${bed.patientId}, deleting...`);
-
         for (const doc of patientDocuments) {
           try {
             // Delete physical file
@@ -502,14 +498,12 @@ export async function deAssignBed(req, res) {
             
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
-              console.log(`Deleted file: ${filePath}`);
             } else {
               console.warn(`File not found: ${filePath}`);
             }
 
             // Delete database record
             await doc.destroy();
-            console.log(`Deleted document record: ${doc.fileName}`);
           } catch (fileError) {
             console.error(`Error deleting document ${doc.fileName}:`, fileError.message);
           }
@@ -565,8 +559,6 @@ export async function debugPatients(req, res) {
       attributes: ["id", "bedNumber", "patientId"],
     });
     
-    console.log("Patients:", JSON.stringify(patients, null, 2));
-    console.log("Beds:", JSON.stringify(beds, null, 2));
     
     res.json({
       patients: patients,

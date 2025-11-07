@@ -35,9 +35,6 @@ export const authorize = (roles = []) => {
       return res.status(401).json({ msg: "Unauthorized - No user found" });
     }
 
-    console.log("User role:", req.user.role);
-    console.log("Required roles:", roles);
-    console.log("User has required role:", roles.includes(req.user.role));
 
     if (roles.length && !roles.includes(req.user.role)) {
       return res

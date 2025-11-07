@@ -44,7 +44,6 @@ const ConsultantDashboard = () => {
   useEffect(() => {
     dispatch(setAppBarTitle("Consultant Dashboard - Bed Management"));
     if (!token) {
-      console.log("No token found, redirecting to login");
       navigate("/login");
       return;
     }

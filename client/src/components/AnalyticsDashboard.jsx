@@ -117,7 +117,6 @@ const AnalyticsDashboard = () => {
         bedsResponse = await axios.get(`${BASE_URL}/beds`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("🚀 ~ fetchAnalyticsData ~ bedsResponse:", bedsResponse);
       } catch (error) {
         console.error("Error fetching beds data:", error);
         dispatch(
@@ -135,7 +134,6 @@ const AnalyticsDashboard = () => {
         const criticalResponse = await axios.get(`${BASE_URL}/critical-factors/critical-patients`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("🚀 ~ fetchAnalyticsData ~ criticalResponse:", criticalResponse);
         criticalPatients = criticalResponse.data?.length || 0;
       } catch (error) {
         console.error("Error fetching critical patients:", error);
@@ -204,15 +202,6 @@ const AnalyticsDashboard = () => {
       const totalBeds = bedsData.length;
       const availableBeds = totalBeds - occupiedBeds;
       const bedOccupancy = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
-      
-      // Debug: Log bed calculation
-      console.log("Bed Availability Calculation:", {
-        totalBeds,
-        occupiedBeds,
-        availableBeds,
-        bedOccupancy: `${bedOccupancy.toFixed(2)}%`,
-        bedNumbers: bedsData.map(b => b.bedNumber)
-      });
 
       // Store beds data for table
       setBeds(bedsData);
@@ -490,7 +479,6 @@ const AnalyticsDashboard = () => {
       console.error("No patient data provided");
       return;
     }
-    console.log("Opening patient details for:", patient.fullName, "Bed:", bedNumber);
     setSelectedPatient(patient);
     setSelectedBedNumber(bedNumber);
     setDialogOpen(true);
@@ -553,7 +541,6 @@ const AnalyticsDashboard = () => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log("Row clicked for patient:", patient.fullName);
                         handlePatientClick(patient, bed.bedNumber);
                       }}
                     >

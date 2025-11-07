@@ -44,7 +44,6 @@ const MedicalOfficerDashboard = () => {
   useEffect(() => {
     dispatch(setAppBarTitle("Medical Officer Dashboard - Bed Management"));
     if (!token) {
-      console.log("No token found, redirecting to login");
       navigate("/login");
       return;
     }
