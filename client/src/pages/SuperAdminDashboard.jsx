@@ -29,8 +29,10 @@ import {
   PersonAdd,
   People,
   HourglassEmpty,
+  Settings,
 } from "@mui/icons-material";
 import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { showToast } from "../features/ui/uiSlice";
 import * as authApi from "../api/authApi";
 
@@ -42,6 +44,7 @@ const SuperAdminDashboard = () => {
   const [approveDialog, setApproveDialog] = useState({ open: false, user: null });
   const [rejectDialog, setRejectDialog] = useState({ open: false, user: null });
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchPendingUsers();
@@ -159,9 +162,19 @@ const SuperAdminDashboard = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: "bold", mb: 3 }}>
-        Super Admin Dashboard
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4" sx={{ fontWeight: "bold" }}>
+          Super Admin Dashboard
+        </Typography>
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<Settings />}
+          onClick={() => navigate("/vital-signs-management")}
+        >
+          Manage Vital Signs
+        </Button>
+      </Box>
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={4}>

@@ -22,27 +22,46 @@ import {
   createVitalSigns,
   updateVitalSigns,
 } from "../api/vitalSignsApi";
+import { getActiveVitalSignsConfig } from "../api/vitalSignsConfigApi";
 import { useSelector } from "react-redux";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 
-const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
+// Default fallback fields (for backward compatibility)
+const defaultFields = [
+  { name: "heartRate", label: "Heart Rate (HR)", unit: "bpm", normalRange: "60–100", dataType: "integer", normalRangeMin: 60, normalRangeMax: 100 },
+  { name: "respiratoryRate", label: "Respiratory Rate (RR)", unit: "breaths/min", normalRange: "12–20", dataType: "integer", normalRangeMin: 12, normalRangeMax: 20 },
+  { name: "bloodPressureSystolic", label: "Blood Pressure (Systolic)", unit: "mmHg", normalRange: "90–120", dataType: "integer", normalRangeMin: 90, normalRangeMax: 120 },
+  { name: "bloodPressureDiastolic", label: "Blood Pressure (Diastolic)", unit: "mmHg", normalRange: "60–80", dataType: "integer", normalRangeMin: 60, normalRangeMax: 80 },
+  { name: "spO2", label: "SpO₂", unit: "%", normalRange: "95–100", dataType: "integer", normalRangeMin: 95, normalRangeMax: 100 },
+  { name: "temperature", label: "Temperature", unit: "°C", normalRange: "36.1–37.2", dataType: "decimal", normalRangeMin: 36.1, normalRangeMax: 37.2 },
+  { name: "glasgowComaScale", label: "Glasgow Coma Scale", unit: "", normalRange: "13–15", dataType: "integer", normalRangeMin: 13, normalRangeMax: 15 },
+  { name: "painScale", label: "Pain Scale", unit: "", normalRange: "0–10", dataType: "integer", normalRangeMin: 0, normalRangeMax: 10 },
+  { name: "bloodGlucose", label: "Blood Glucose", unit: "mg/dL", normalRange: "70–140", dataType: "integer", normalRangeMin: 70, normalRangeMax: 140 },
+  { name: "urineOutput", label: "Urine Output", unit: "mL/kg/hr", normalRange: "≥0.5", dataType: "decimal", normalRangeMin: 0.5, normalRangeMax: null },
+];
+
+const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) => {
   const currentUser = useSelector((state) => state.auth.user);
-  const initialFormState = useMemo(
-    () => ({
-      heartRate: "", // 60–100 bpm
-      respiratoryRate: "", // 12–20 breaths/min
-      bloodPressureSystolic: "", // 90-120 mmHg
-      bloodPressureDiastolic: "", // 60-80 mmHg
-      spO2: "", // 95–100%
-      temperature: "", // 36.1–37.2 °C
-      glasgowComaScale: "", // 13–15 (normal)
-      painScale: "", // 0–10
-      bloodGlucose: "", // 70–140 mg/dL
-      urineOutput: "", // ≥0.5 mL/kg/hr (Store as direct value for now)
-    }),
-    []
-  );
+  const [vitalSignsConfig, setVitalSignsConfig] = useState([]);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  
+  // Generate initial form state dynamically from vital signs config, with fallback
+  const initialFormState = useMemo(() => {
+    const state = {};
+    if (vitalSignsConfig.length > 0) {
+      vitalSignsConfig.forEach((config) => {
+        state[config.name] = "";
+      });
+    } else {
+      // Fallback to default fields
+      defaultFields.forEach((field) => {
+        state[field.name] = "";
+      });
+    }
+    return state;
+  }, [vitalSignsConfig]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
@@ -52,63 +71,65 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [amendmentReason, setAmendmentReason] = useState("");
 
-  const validationSchema = Yup.object({
-    heartRate: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(20, "Heart rate should be at least 20 bpm")
-      .max(250, "Heart rate should not exceed 250 bpm"),
-    respiratoryRate: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(5, "Respiratory rate should be at least 5 breaths/min")
-      .max(60, "Respiratory rate should not exceed 60 breaths/min"),
-    bloodPressureSystolic: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(60, "Systolic pressure should be at least 60 mmHg")
-      .max(250, "Systolic pressure should not exceed 250 mmHg"),
-    bloodPressureDiastolic: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(30, "Diastolic pressure should be at least 30 mmHg")
-      .max(150, "Diastolic pressure should not exceed 150 mmHg"),
-    spO2: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(50, "SpO2 should be at least 50%")
-      .max(100, "SpO2 should not exceed 100%"),
-    temperature: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(30, "Temperature should be at least 30°C")
-      .max(45, "Temperature should not exceed 45°C"),
-    glasgowComaScale: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(3, "GCS should be at least 3")
-      .max(15, "GCS should not exceed 15"),
-    painScale: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(0, "Pain scale should be at least 0")
-      .max(10, "Pain scale should not exceed 10"),
-    bloodGlucose: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(20, "Blood glucose should be at least 20 mg/dL")
-      .max(600, "Blood glucose should not exceed 600 mg/dL"),
-    urineOutput: Yup.number()
-      .nullable()
-      .transform((value) => (isNaN(value) ? null : value))
-      .min(0, "Urine output should be at least 0 mL/kg/hr")
-      .max(10, "Urine output should not exceed 10 mL/kg/hr"),
-  });
+  // Fetch active vital signs configuration
+  useEffect(() => {
+    const fetchVitalSignsConfig = async () => {
+      setLoadingConfig(true);
+      try {
+        const configs = await getActiveVitalSignsConfig();
+        // Sort by displayOrder
+        const sortedConfigs = configs.sort((a, b) => a.displayOrder - b.displayOrder);
+        setVitalSignsConfig(sortedConfigs);
+      } catch (error) {
+        console.error("Error fetching vital signs config:", error);
+        // Fallback to default configs if API fails
+        setVitalSignsConfig([]);
+      } finally {
+        setLoadingConfig(false);
+      }
+    };
+
+    if (open) {
+      fetchVitalSignsConfig();
+    }
+  }, [open]);
+
+  // Generate validation schema dynamically from vital signs config, with fallback
+  const validationSchema = useMemo(() => {
+    const schema = {};
+    const configsToUse = vitalSignsConfig.length > 0 ? vitalSignsConfig : defaultFields;
+    
+    configsToUse.forEach((config) => {
+      if (config.dataType === "integer" || config.dataType === "decimal") {
+        schema[config.name] = Yup.number()
+          .nullable()
+          .transform((value) => (isNaN(value) ? null : value));
+        
+        // Add min/max validation if normal ranges are defined
+        if (config.normalRangeMin !== null) {
+          schema[config.name] = schema[config.name].min(
+            config.normalRangeMin,
+            `${config.label} should be at least ${config.normalRangeMin}${config.unit ? ` ${config.unit}` : ""}`
+          );
+        }
+        if (config.normalRangeMax !== null) {
+          schema[config.name] = schema[config.name].max(
+            config.normalRangeMax,
+            `${config.label} should not exceed ${config.normalRangeMax}${config.unit ? ` ${config.unit}` : ""}`
+          );
+        }
+      } else if (config.dataType === "text") {
+        schema[config.name] = Yup.string().nullable();
+      }
+    });
+    return Yup.object(schema);
+  }, [vitalSignsConfig]);
 
   // Formik setup
   const formik = useFormik({
     initialValues: initialFormState,
     validationSchema,
+    enableReinitialize: true, // Reinitialize when initialFormState or validationSchema changes
     validateOnBlur: true,
     validateOnChange: true,
     onSubmit: async (values) => {
@@ -116,12 +137,55 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
       setError(null);
       setSuccessMessage(null);
 
-      const payload = {
-        ...values,
-        patientId: patientId,
-        recordedBy: currentUser?.id,
-        recordedAt: new Date().toISOString(),
-      };
+      // When creating a new record (not updating), only include fields that were actually changed/entered
+      // Compare with the latest record to determine which fields were updated
+      let payload = {};
+      
+      if (isUpdateMode && latestRecord?.id) {
+        // Update mode: send all values (as before)
+        payload = {
+          ...values,
+          patientId: patientId,
+          recordedBy: currentUser?.id,
+          recordedAt: new Date().toISOString(),
+        };
+      } else {
+        // Create mode: only include fields that were actually entered/changed
+        // Compare with latest record to find changed fields
+        const changedFields = {};
+        
+        for (const key in values) {
+          const currentValue = values[key] === "" ? null : values[key];
+          const previousValue = latestRecord?.[key] === null || latestRecord?.[key] === undefined 
+            ? null 
+            : latestRecord[key];
+          
+          // Include field if:
+          // 1. It has a value (not empty/null)
+          // 2. It's different from the previous record (or there's no previous record)
+          if (currentValue !== null && currentValue !== undefined && currentValue !== "") {
+            // Convert to appropriate type for comparison
+            const currentValueNum = typeof currentValue === 'string' && !isNaN(currentValue) 
+              ? parseFloat(currentValue) 
+              : currentValue;
+            const previousValueNum = previousValue !== null && !isNaN(previousValue) 
+              ? parseFloat(previousValue) 
+              : previousValue;
+            
+            // Include if value changed or if there's no previous record
+            if (!latestRecord || currentValueNum !== previousValueNum) {
+              changedFields[key] = currentValue;
+            }
+          }
+        }
+        
+        payload = {
+          ...changedFields,
+          patientId: patientId,
+          recordedBy: currentUser?.id,
+          recordedAt: new Date().toISOString(),
+        };
+      }
 
       // Convert empty strings to null for the backend
       for (const key in payload) {
@@ -149,6 +213,10 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
         }
 
         setIsLoading(false);
+        // Call onSave callback to refresh parent data
+        if (onSave) {
+          onSave();
+        }
         setTimeout(() => {
           onClose();
         }, 2000);
@@ -163,13 +231,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
     },
   });
 
-  // Fetch the latest vital signs when the form opens
-  useEffect(() => {
-    if (open && patientId) {
-      fetchLatestVitals();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, patientId]);
   // Fetch latest vitals for the patient
   const fetchLatestVitals = async () => {
     if (!patientId) return;
@@ -180,49 +241,92 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
     try {
       const data = await fetchLatestVitalSigns(patientId);
       if (data && data.length > 0) {
-        // Get the most recent record (assuming they are sorted by recordedAt DESC)
+        // Get the most recent record (for update mode)
         const latest = data[0];
         setLatestRecord(latest);
 
-        // Populate form with the latest values
+        // Merge ALL records to get the most recent value for each field
+        // This ensures we show all previously entered values, not just from the latest record
+        const mergedValues = {};
+        
+        // Process all records in chronological order (oldest first)
+        // This way, newer values will overwrite older ones
+        const sortedData = [...data].sort((a, b) => 
+          new Date(a.recordedAt) - new Date(b.recordedAt)
+        );
+        
+        // Merge all records - each record adds/updates its fields
+        sortedData.forEach(record => {
+          // Process all fields in the record
+          for (const key in record) {
+            // Skip metadata fields
+            const excludedFields = ['id', 'recordedAt', 'recordedBy', 'isAmended', 
+              'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 
+              'patientId', 'createdAt', 'updatedAt', 'recorder'];
+            
+            if (!excludedFields.includes(key) && 
+                record[key] !== null && 
+                record[key] !== undefined && 
+                record[key] !== '' &&
+                typeof record[key] !== 'object') {
+              // Use the most recent value (later records overwrite earlier ones)
+              mergedValues[key] = record[key];
+            }
+          }
+        });
+
+        // Populate form with merged values from all records
         const formValues = { ...initialFormState };
-        // Map each field from the latest record to the form
+        
+        // Map merged values to form fields
         for (const key in formValues) {
-          if (latest[key] !== null && latest[key] !== undefined) {
-            formValues[key] = latest[key].toString();
+          if (mergedValues[key] !== null && mergedValues[key] !== undefined && mergedValues[key] !== '') {
+            formValues[key] = mergedValues[key].toString();
           }
         }
+        
         formik.setValues(formValues);
       } else {
         // If no records found, reset to initial state
-        formik.resetForm();
+        formik.resetForm({ values: initialFormState });
         setLatestRecord(null);
       }
     } catch (err) {
       setError(err.message || "Failed to fetch latest vital signs.");
-      formik.resetForm();
+      formik.resetForm({ values: initialFormState });
     } finally {
       setFetchingData(false);
     }
   };
 
-  // Reset form when dialog opens
+  // Fetch the latest vital signs when the form opens and config is loaded
+  useEffect(() => {
+    if (open && patientId && vitalSignsConfig.length > 0 && !loadingConfig) {
+      // Wait a bit for formik to reinitialize with new config
+      setTimeout(() => {
+        fetchLatestVitals();
+      }, 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, patientId, vitalSignsConfig.length, loadingConfig]);
+
+  // Reset form when dialog opens (but don't reset when config changes if form is already open)
   useEffect(() => {
     if (open) {
       setError(null);
       setSuccessMessage(null);
       setIsUpdateMode(false);
       setAmendmentReason("");
-      console.log(
-        "[DEBUG] CriticalFactorsForm opened for patientId:",
-        patientId
-      );
-    } else {
+      // Only reset if we don't have a latest record yet
+      if (!latestRecord) {
+        formik.resetForm({ values: initialFormState });
+      }
+    } else if (!open) {
       formik.resetForm();
       setLatestRecord(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]); // Intentionally excluding formik to prevent infinite renders
+  }, [open]); // Only reset when dialog opens/closes, not when config changes
 
   // Handle toggle between create and update modes
   const handleModeToggle = (event) => {
@@ -281,12 +385,54 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
     setError(null);
     setSuccessMessage(null);
 
-    const payload = {
-      ...values,
-      patientId: patientId,
-      recordedBy: currentUser?.id,
-      recordedAt: new Date().toISOString(),
-    };
+    // When creating a new record (not updating), only include fields that were actually changed/entered
+    let payload = {};
+    
+    if (isUpdateMode && latestRecord?.id) {
+      // Update mode: send all values (as before)
+      payload = {
+        ...values,
+        patientId: patientId,
+        recordedBy: currentUser?.id,
+        recordedAt: new Date().toISOString(),
+      };
+    } else {
+      // Create mode: only include fields that were actually entered/changed
+      // Compare with latest record to find changed fields
+      const changedFields = {};
+      
+      for (const key in values) {
+        const currentValue = values[key] === "" ? null : values[key];
+        const previousValue = latestRecord?.[key] === null || latestRecord?.[key] === undefined 
+          ? null 
+          : latestRecord[key];
+        
+        // Include field if:
+        // 1. It has a value (not empty/null)
+        // 2. It's different from the previous record (or there's no previous record)
+        if (currentValue !== null && currentValue !== undefined && currentValue !== "") {
+          // Convert to appropriate type for comparison
+          const currentValueNum = typeof currentValue === 'string' && !isNaN(currentValue) 
+            ? parseFloat(currentValue) 
+            : currentValue;
+          const previousValueNum = previousValue !== null && !isNaN(previousValue) 
+            ? parseFloat(previousValue) 
+            : previousValue;
+          
+          // Include if value changed or if there's no previous record
+          if (!latestRecord || currentValueNum !== previousValueNum) {
+            changedFields[key] = currentValue;
+          }
+        }
+      }
+      
+      payload = {
+        ...changedFields,
+        patientId: patientId,
+        recordedBy: currentUser?.id,
+        recordedAt: new Date().toISOString(),
+      };
+    }
 
     // Convert empty strings to null for the backend
     for (const key in payload) {
@@ -312,6 +458,10 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
       }
 
       setIsLoading(false);
+      // Call onSave callback to refresh parent data
+      if (onSave) {
+        onSave();
+      }
       setTimeout(() => {
         onClose();
       }, 2000);
@@ -330,89 +480,48 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
     setConfirmDialogOpen(false);
   };
 
-  const fields = [
-    {
-      name: "heartRate",
-      label: "Heart Rate (HR)",
-      unit: "bpm",
-      normalRange: "60–100",
-    },
-    {
-      name: "respiratoryRate",
-      label: "Respiratory Rate (RR)",
-      unit: "breaths/min",
-      normalRange: "12–20",
-    },
-    {
-      name: "bloodPressureSystolic",
-      label: "Blood Pressure (Systolic)",
-      unit: "mmHg",
-      normalRange: "90–120",
-    },
-    {
-      name: "bloodPressureDiastolic",
-      label: "Blood Pressure (Diastolic)",
-      unit: "mmHg",
-      normalRange: "60–80",
-    },
-    { name: "spO2", label: "SpO₂", unit: "%", normalRange: "95–100" },
-    {
-      name: "temperature",
-      label: "Temperature",
-      unit: "°C",
-      normalRange: "36.1–37.2",
-    },
-    {
-      name: "glasgowComaScale",
-      label: "Glasgow Coma Scale",
-      unit: "",
-      normalRange: "13–15",
-    },
-    { name: "painScale", label: "Pain Scale", unit: "", normalRange: "0–10" },
-    {
-      name: "bloodGlucose",
-      label: "Blood Glucose",
-      unit: "mg/dL",
-      normalRange: "70–140",
-    },
-    {
-      name: "urineOutput",
-      label: "Urine Output",
-      unit: "mL/kg/hr",
-      normalRange: "≥0.5",
-    },
-  ];
+  // Generate fields array dynamically from vital signs config, with fallback to defaults
+  const fields = useMemo(() => {
+    if (vitalSignsConfig.length > 0) {
+      return vitalSignsConfig.map((config) => ({
+        name: config.name,
+        label: config.label,
+        unit: config.unit || "",
+        normalRange: 
+          config.normalRangeMin !== null && config.normalRangeMax !== null
+            ? `${config.normalRangeMin}–${config.normalRangeMax}`
+            : config.normalRangeMin !== null
+            ? `≥${config.normalRangeMin}`
+            : config.normalRangeMax !== null
+            ? `≤${config.normalRangeMax}`
+            : "",
+        dataType: config.dataType,
+        normalRangeMin: config.normalRangeMin,
+        normalRangeMax: config.normalRangeMax,
+      }));
+    }
+    // Fallback to default fields if config is empty
+    return defaultFields;
+  }, [vitalSignsConfig]);
 
-  // Function to check if a value is outside the normal range
-  const isOutsideNormalRange = (field, value) => {
+  // Function to check if a value is outside the normal range (dynamic with fallback)
+  const isOutsideNormalRange = (fieldName, value) => {
     if (!value || value === "") return false;
 
     const numValue = parseFloat(value);
-
-    switch (field) {
-      case "heartRate":
-        return numValue < 60 || numValue > 100;
-      case "respiratoryRate":
-        return numValue < 12 || numValue > 20;
-      case "bloodPressureSystolic":
-        return numValue < 90 || numValue > 120;
-      case "bloodPressureDiastolic":
-        return numValue < 60 || numValue > 80;
-      case "spO2":
-        return numValue < 95 || numValue > 100;
-      case "temperature":
-        return numValue < 36.1 || numValue > 37.2;
-      case "glasgowComaScale":
-        return numValue < 13 || numValue > 15;
-      case "painScale":
-        return numValue < 0 || numValue > 10; // Updated to match requirement range 0-10
-      case "bloodGlucose":
-        return numValue < 70 || numValue > 140;
-      case "urineOutput":
-        return numValue < 0.5;
-      default:
-        return false;
+    const configsToUse = vitalSignsConfig.length > 0 ? vitalSignsConfig : defaultFields;
+    const config = configsToUse.find((c) => c.name === fieldName);
+    
+    if (!config) return false;
+    
+    if (config.normalRangeMin !== null && numValue < config.normalRangeMin) {
+      return true;
     }
+    if (config.normalRangeMax !== null && numValue > config.normalRangeMax) {
+      return true;
+    }
+    
+    return false;
   };
 
   // Reset amendment reason when switching modes or closing
@@ -447,30 +556,19 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
                 <Typography variant="body2" sx={{ fontWeight: "bold", mb: 1 }}>
                   Normal Ranges:
                 </Typography>
-                <Typography variant="body2">Heart Rate: 60-100 bpm</Typography>
-                <Typography variant="body2">
-                  Respiratory Rate: 12-20 breaths/min
-                </Typography>
-                <Typography variant="body2">
-                  Blood Pressure (Systolic): 90-120 mmHg
-                </Typography>
-                <Typography variant="body2">
-                  Blood Pressure (Diastolic): 60-80 mmHg
-                </Typography>
-                <Typography variant="body2">SpO2: 95-100%</Typography>
-                <Typography variant="body2">
-                  Temperature: 36.1-37.2°C
-                </Typography>
-                <Typography variant="body2">
-                  Glasgow Coma Scale: 13-15
-                </Typography>
-                <Typography variant="body2">Pain Scale: 0-10</Typography>
-                <Typography variant="body2">
-                  Blood Glucose: 70-140 mg/dL
-                </Typography>
-                <Typography variant="body2">
-                  Urine Output: ≥0.5 mL/kg/hr
-                </Typography>
+                {(vitalSignsConfig.length > 0 ? vitalSignsConfig : defaultFields).map((config, index) => (
+                  <Typography key={config.id || config.name || index} variant="body2">
+                    {config.label}:{" "}
+                    {config.normalRangeMin !== null && config.normalRangeMax !== null
+                      ? `${config.normalRangeMin}-${config.normalRangeMax}`
+                      : config.normalRangeMin !== null
+                      ? `≥${config.normalRangeMin}`
+                      : config.normalRangeMax !== null
+                      ? `≤${config.normalRangeMax}`
+                      : "N/A"}
+                    {config.unit ? ` ${config.unit}` : ""}
+                  </Typography>
+                ))}
               </Box>
             }
             placement="right"
@@ -519,7 +617,14 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
           </Alert>
         )}
 
-        {fetchingData ? (
+        {loadingConfig ? (
+          <Box display="flex" justifyContent="center" my={4}>
+            <CircularProgress />
+            <Typography variant="body2" sx={{ ml: 2 }}>
+              Loading vital signs configuration...
+            </Typography>
+          </Box>
+        ) : fetchingData ? (
           <Box display="flex" justifyContent="center" my={4}>
             <CircularProgress />
           </Box>
@@ -594,14 +699,15 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
                       <TextField
                         fullWidth
                         type={
-                          field.name === "temperature" ||
-                          field.name === "urineOutput"
+                          field.dataType === "text"
+                            ? "text"
+                            : field.dataType === "decimal"
                             ? "number"
                             : "number"
                         }
                         name={field.name}
-                        label={`${field.label} (${field.unit})`}
-                        value={formik.values[field.name]}
+                        label={`${field.label}${field.unit ? ` (${field.unit})` : ""}`}
+                        value={formik.values[field.name] || ""}
                         onChange={formik.handleChange}
                         onBlur={formik.handleBlur}
                         error={
@@ -613,8 +719,10 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
                           (formik.touched[field.name] &&
                             formik.errors[field.name]) ||
                           (isOutsideRange
-                            ? `Outside normal range: ${field.normalRange}`
-                            : `Normal: ${field.normalRange}`)
+                            ? `⚠️ Outside normal range${field.normalRange ? ` (${field.normalRange}${field.unit ? ` ${field.unit}` : ""})` : ""}`
+                            : field.normalRange
+                            ? `Normal range: ${field.normalRange}${field.unit ? ` ${field.unit}` : ""}`
+                            : "")
                         }
                         variant="outlined"
                         margin="dense"
@@ -622,7 +730,7 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
                           shrink: true,
                         }}
                         InputProps={{
-                          endAdornment: (
+                          endAdornment: field.unit ? (
                             <Typography
                               variant="caption"
                               color="text.secondary"
@@ -630,19 +738,15 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber }) => {
                             >
                               {field.unit}
                             </Typography>
-                          ),
+                          ) : null,
                           sx: {
                             fontWeight: isOutsideRange ? "bold" : "normal",
                           },
                         }}
                         inputProps={{
-                          step:
-                            field.name === "temperature" ||
-                            field.name === "urineOutput"
-                              ? "0.1"
-                              : "1",
+                          step: field.dataType === "decimal" ? "0.1" : field.dataType === "integer" ? "1" : undefined,
                           style: {
-                            textAlign: "right",
+                            textAlign: field.dataType === "text" ? "left" : "right",
                             paddingRight: field.unit ? "50px" : "14px",
                           },
                         }}

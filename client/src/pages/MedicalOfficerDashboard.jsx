@@ -151,14 +151,7 @@ const MedicalOfficerDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Medical Officer Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome, {user?.fullName}. Manage patient bed assignments, monitor critical alerts, and provide medical care.
-        </Typography>
-      </Box>
+
 
       {/* Critical Alerts System */}
       <Box sx={{ mb: 3 }}>
@@ -180,13 +173,7 @@ const MedicalOfficerDashboard = () => {
       {/* Tab Content */}
       {selectedTab === 0 && (
         <Card sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h5" gutterBottom>
-            Bed Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Click on an available bed to assign a patient, or use the action buttons on occupied beds. 
-            As a Medical Officer, you can admit patients, update vitals, and discharge patients.
-          </Typography>
+ 
           
           <Grid
             container

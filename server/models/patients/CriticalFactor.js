@@ -95,6 +95,12 @@ const defineCriticalFactor = (sequelize) => {
         allowNull: true,
         comment: "Reason for amending this critical factor record",
       },
+      dynamicVitals: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: "Stores dynamic vital signs that are not standard columns (e.g., capillaryRefillTime, respiratoryEffort)",
+      },
     },
     {
       timestamps: true,

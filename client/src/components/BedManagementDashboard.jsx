@@ -226,14 +226,7 @@ const BedManagementDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Bed Management Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Manage patient bed assignments and monitor occupancy
-        </Typography>
-      </Box>
+
 
       {/* Statistics Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>

@@ -9,6 +9,7 @@ import definePatientDocument from "../models/patients/PatientDocument.js";
 import defineUser from "../models/UserMySQL.js";
 import defineCriticalFactor from "../models/patients/CriticalFactor.js";
 import defineAuditLog from "../models/AuditLog.js";
+import defineVitalSignsConfig from "../models/VitalSignsConfig.js";
 
 const BedMySQL = defineBed(sequelize);
 const Patient = definePatient(sequelize);
@@ -19,6 +20,7 @@ const PatientDocument = definePatientDocument(sequelize);
 const UserMySQLModel = defineUser(sequelize);
 const CriticalFactor = defineCriticalFactor(sequelize);
 const AuditLog = defineAuditLog(sequelize);
+const VitalSignsConfig = defineVitalSignsConfig(sequelize);
 
 const defineAssociations = () => {
   Patient.hasMany(Admission, { foreignKey: "patientId", as: "admissions" });
@@ -181,4 +183,5 @@ export {
   UserMySQLModel,
   CriticalFactor,
   AuditLog,
+  VitalSignsConfig,
 };

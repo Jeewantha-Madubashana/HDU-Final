@@ -32,6 +32,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { showToast } from "../features/ui/uiSlice";
 import axios from "axios";
 import { acknowledgeAlert } from "../api/vitalSignsApi";
+import { getActiveVitalSignsConfig } from "../api/vitalSignsConfigApi";
 
 const CriticalAlertsSystem = () => {
   const [alerts, setAlerts] = useState([]);
@@ -48,6 +49,7 @@ const CriticalAlertsSystem = () => {
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [alertDetailsOpen, setAlertDetailsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [vitalSignsConfig, setVitalSignsConfig] = useState([]);
 
   const dispatch = useDispatch();
   const token = useSelector((state) => state.auth.token);
@@ -57,6 +59,19 @@ const CriticalAlertsSystem = () => {
     setAcknowledgedAlerts(newAcknowledgedAlerts);
     localStorage.setItem('acknowledgedAlerts', JSON.stringify([...newAcknowledgedAlerts]));
   };
+
+  // Fetch vital signs configuration
+  useEffect(() => {
+    const fetchVitalSignsConfig = async () => {
+      try {
+        const configs = await getActiveVitalSignsConfig();
+        setVitalSignsConfig(configs);
+      } catch (error) {
+        console.error("Error fetching vital signs config:", error);
+      }
+    };
+    fetchVitalSignsConfig();
+  }, []);
 
   useEffect(() => {
     fetchCriticalAlerts();
@@ -508,22 +523,74 @@ const CriticalAlertsSystem = () => {
                     Critical Factors
                   </Typography>
                   <List dense>
-                    {selectedAlert.details.map((factor, index) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={`Recorded at: ${new Date(factor.recordedAt).toLocaleString()}`}
-                          secondary={
-                            <Box>
-                              {factor.heartRate && <Typography variant="body2">Heart Rate: {factor.heartRate} bpm</Typography>}
-                              {factor.respiratoryRate && <Typography variant="body2">Respiratory Rate: {factor.respiratoryRate} breaths/min</Typography>}
-                              {factor.bloodPressureSystolic && <Typography variant="body2">Blood Pressure: {factor.bloodPressureSystolic}/{factor.bloodPressureDiastolic} mmHg</Typography>}
-                              {factor.spO2 && <Typography variant="body2">SpO2: {factor.spO2}%</Typography>}
-                              {factor.temperature && <Typography variant="body2">Temperature: {factor.temperature}°C</Typography>}
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    ))}
+                    {selectedAlert.details.map((factor, index) => {
+                      // Get all vital signs from the factor dynamically using vitalSignsConfig
+                      const vitalSigns = [];
+                      
+                      // Fields to exclude (metadata, not vital signs)
+                      const excludedFields = ['id', 'recordedAt', 'recordedBy', 'isAmended', 'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'patientId', 'createdAt', 'updatedAt', 'recorder'];
+                      
+                      // Get all fields from the factor that have values
+                      // Only include primitive values (strings, numbers), exclude objects
+                      const factorFields = Object.keys(factor).filter(key => 
+                        !excludedFields.includes(key) &&
+                        factor[key] !== null && 
+                        factor[key] !== undefined && 
+                        factor[key] !== '' &&
+                        typeof factor[key] !== 'object' // Exclude objects (like recorder)
+                      );
+                      
+                      // Sort fields by displayOrder from config
+                      const sortedFields = factorFields.map(fieldName => {
+                        const config = vitalSignsConfig.find(c => c.name === fieldName);
+                        return {
+                          name: fieldName,
+                          label: config ? config.label : fieldName,
+                          unit: config ? (config.unit || '') : '',
+                          displayOrder: config ? config.displayOrder : 999,
+                          value: factor[fieldName],
+                        };
+                      }).sort((a, b) => a.displayOrder - b.displayOrder);
+                      
+                      // Display all fields dynamically based on config (no hardcoded special cases)
+                      sortedFields.forEach(field => {
+                        vitalSigns.push({
+                          label: field.label,
+                          value: field.value,
+                          unit: field.unit,
+                        });
+                      });
+                      
+                      return (
+                        <ListItem key={index}>
+                          <ListItemText
+                            primary={`Recorded at: ${new Date(factor.recordedAt).toLocaleString()}`}
+                            secondary={
+                              <Box sx={{ mt: 1 }}>
+                                {vitalSigns.length > 0 ? (
+                                  <>
+                                    {vitalSigns.map((vital, vitalIndex) => (
+                                      <Typography key={vitalIndex} variant="body2" sx={{ mb: 0.5 }}>
+                                        {vital.label}: {vital.value}{vital.suffix}{vital.unit ? ` ${vital.unit}` : ''}
+                                      </Typography>
+                                    ))}
+                                    {factor.recorder && (
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
+                                        Recorded by: {factor.recorder?.nameWithInitials || factor.recorder?.username || 'Unknown'}
+                                      </Typography>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary">
+                                    No vital signs recorded
+                                  </Typography>
+                                )}
+                              </Box>
+                            }
+                          />
+                        </ListItem>
+                      );
+                    })}
                   </List>
                 </>
               )}

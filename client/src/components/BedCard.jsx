@@ -45,7 +45,8 @@ import PatientDocumentsViewer from "./PatientDocumentsViewer";
 import { fetchLatestVitalSigns } from "../api/vitalSignsApi";
 
 const StyledCard = styled(Card)(({ theme, occupied }) => ({
-  height: "520px",
+  minHeight: "300px",
+  height: "auto",
   display: "flex",
   flexDirection: "column",
   position: "relative",
@@ -116,6 +117,13 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
     setVitalsFormOpen(false);
   };
 
+  const handleVitalsFormSave = () => {
+    // Refresh latest vitals after save
+    if (patient?.id) {
+      fetchLatestVitals();
+    }
+  };
+
   const fetchLatestVitals = async () => {
     if (!patient?.id) return;
     
@@ -148,9 +156,9 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
   return (
     <>
       <StyledCard occupied={isOccupied} onClick={handleCardClick}>
-        <CardContent sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+        <CardContent sx={{ flexGrow: 1, display: "flex", flexDirection: "column", pt: 1.5, pb: 1.5, px: 1.5 }}>
           {/* Bed Header */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 0 }}>
             <Typography variant="h6" component="div" color="primary">
               Bed {bed.bedNumber}
             </Typography>
@@ -164,8 +172,8 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
           {isOccupied && patient ? (
             <>
               {/* Patient Avatar and Basic Info */}
-              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                <Avatar sx={{ bgcolor: "primary.main", mr: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                <Avatar sx={{ bgcolor: "primary.main", mr: 1.5 }}>
                   <Person />
                 </Avatar>
                 <Box>
@@ -179,51 +187,59 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
               </Box>
 
               {/* Patient Details */}
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <Box sx={{ mb: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Wc sx={{ fontSize: "16px", color: "primary.main" }} />
                   <Typography variant="body2">
                     <strong>Gender:</strong> {patient.gender}
                   </Typography>
                 </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <Phone sx={{ fontSize: "16px", color: "primary.main" }} />
-                  <Typography variant="body2">
-                    <strong>Contact:</strong> {patient.contactNumber}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <CalendarToday sx={{ fontSize: "16px", color: "primary.main" }} />
-                  <Typography variant="body2">
-                    <strong>DOB:</strong> {patient.dateOfBirth}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <LocationOn sx={{ fontSize: "16px", color: "primary.main" }} />
-                  <Typography variant="body2">
-                    <strong>Address:</strong> {patient.address}
-                  </Typography>
-                </Box>
               </Box>
 
-              {/* Click hint for occupied beds */}
-              <Box sx={{ textAlign: "center", mb: 2 }}>
-                <Typography variant="caption" color="primary" sx={{ fontStyle: "italic" }}>
-                  Click to view full details
-                </Typography>
-              </Box>
-
-              {/* Action Buttons - Fixed at bottom */}
+              {/* Action Buttons */}
               <Box
                 sx={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 1,
+                  gap: 1.5,
                   width: "100%",
-                  mt: "auto",
-                  pt: 2
+                  mt: 1
                 }}
               >
+                {/* View Details Button */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  fullWidth
+                  sx={{
+                    textTransform: "none",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    borderRadius: "6px",
+                    backgroundColor: "#3498db",
+                    color: "white",
+                    paddingX: 2.5,
+                    paddingY: 1.2,
+                    boxShadow: "none",
+                    border: "none",
+                    "&:hover": {
+                      backgroundColor: "#2980b9",
+                      boxShadow: "0 2px 8px rgba(52, 152, 219, 0.3)",
+                      transform: "none",
+                    },
+                    "&:active": {
+                      backgroundColor: "#21618c",
+                      transform: "none",
+                    },
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCardClick();
+                  }}
+                >
+                  View Full Details
+                </Button>
                 <Tooltip title="Discharge patient with medical documentation" placement="top">
                   {deassignBed && (
                     <Button
@@ -596,6 +612,7 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
         <CriticalFactorsForm
           open={vitalsFormOpen}
           onClose={handleVitalsFormClose}
+          onSave={handleVitalsFormSave}
           patientId={patient.id}
           bedNumber={bed.bedNumber}
         />

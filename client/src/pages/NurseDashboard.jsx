@@ -99,14 +99,7 @@ const NurseDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Nurse Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome, {user?.fullName}. Manage patient bed assignments and monitor critical alerts.
-        </Typography>
-      </Box>
+
 
       {/* Critical Alerts System */}
       <Box sx={{ mb: 3 }}>

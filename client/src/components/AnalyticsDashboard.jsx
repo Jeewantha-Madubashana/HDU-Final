@@ -175,15 +175,73 @@ const AnalyticsDashboard = () => {
         // Continue with default values
       }
 
+      // Fetch patient analytics (demographics and vital signs trends)
+      let patientAnalytics = {
+        genderDistribution: [],
+        ageGroups: [],
+        vitalSignsTrends: mockVitalSignsData,
+      };
+      try {
+        const analyticsResponse = await axios.get(`${BASE_URL}/patients/analytics`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        patientAnalytics = analyticsResponse.data;
+      } catch (error) {
+        console.error("Error fetching patient analytics:", error);
+        dispatch(
+          showToast({
+            message: "Failed to fetch patient analytics",
+            type: "warning",
+          })
+        );
+        // Continue with default values
+      }
+
       // Calculate analytics
       const bedsData = bedsResponse.data;
-      const occupiedBeds = bedsData.filter(bed => bed.patientId !== null).length;
+      // Count occupied beds - bed must have patientId AND patient must exist
+      const occupiedBeds = bedsData.filter(bed => bed.patientId !== null && bed.Patient).length;
       const totalBeds = bedsData.length;
       const availableBeds = totalBeds - occupiedBeds;
       const bedOccupancy = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
+      
+      // Debug: Log bed calculation
+      console.log("Bed Availability Calculation:", {
+        totalBeds,
+        occupiedBeds,
+        availableBeds,
+        bedOccupancy: `${bedOccupancy.toFixed(2)}%`,
+        bedNumbers: bedsData.map(b => b.bedNumber)
+      });
 
       // Store beds data for table
       setBeds(bedsData);
+
+      // Format vital signs trends - ensure we have arrays with at least some data
+      const vitalSignsTrends = {
+        heartRate: patientAnalytics.vitalSignsTrends?.heartRate?.length > 0 
+          ? patientAnalytics.vitalSignsTrends.heartRate 
+          : mockVitalSignsData.heartRate,
+        bloodPressure: patientAnalytics.vitalSignsTrends?.bloodPressure?.length > 0 
+          ? patientAnalytics.vitalSignsTrends.bloodPressure 
+          : mockVitalSignsData.bloodPressure,
+        temperature: patientAnalytics.vitalSignsTrends?.temperature?.length > 0 
+          ? patientAnalytics.vitalSignsTrends.temperature 
+          : mockVitalSignsData.temperature,
+        spO2: patientAnalytics.vitalSignsTrends?.spO2?.length > 0 
+          ? patientAnalytics.vitalSignsTrends.spO2 
+          : mockVitalSignsData.spO2,
+      };
+
+      // Format demographics
+      const demographics = {
+        ageGroups: patientAnalytics.ageGroups?.length > 0 
+          ? patientAnalytics.ageGroups 
+          : mockPatientDemographics.ageGroups,
+        gender: patientAnalytics.genderDistribution?.length > 0 
+          ? patientAnalytics.genderDistribution 
+          : mockPatientDemographics.gender,
+      };
 
       setAnalyticsData({
         bedOccupancy: Math.round(bedOccupancy),
@@ -195,8 +253,8 @@ const AnalyticsDashboard = () => {
         maxStay: alosResponse.maxStay || 0,
         currentPatients: alosResponse.currentPatients || 0,
         currentAvgStay: parseFloat(alosResponse.currentAvgStay || 0),
-        vitalSignsTrends: mockVitalSignsData,
-        demographics: mockPatientDemographics,
+        vitalSignsTrends: vitalSignsTrends,
+        demographics: demographics,
         bedAvailability: [
           { label: "Available", value: availableBeds, color: "#4CAF50" },
           { label: "Occupied", value: occupiedBeds, color: "#F44336" },
@@ -563,9 +621,7 @@ const AnalyticsDashboard = () => {
     <Box>
       {/* Header with refresh button */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5" gutterBottom>
-          Analytics Dashboard
-        </Typography>
+
         <Tooltip title="Refresh Data">
           <IconButton onClick={fetchAnalyticsData} disabled={loading}>
             <RefreshIcon />
@@ -636,13 +692,13 @@ const AnalyticsDashboard = () => {
         </Grid>
 
         {/* Critical Alerts by Type */}
-        <Grid item xs={12} md={6}>
+        {/* <Grid item xs={12} md={6}>
           <SimpleBarChart
             data={[5, 3, 2, 1]} // Heart Rate, BP, SpO2, Temperature
             title="Critical Alerts by Type"
             labels={["Heart Rate", "Blood Pressure", "SpO2", "Temperature"]}
           />
-        </Grid>
+        </Grid> */}
 
         {/* Patient Demographics - Gender */}
         <Grid item xs={12} md={6}>
@@ -653,9 +709,9 @@ const AnalyticsDashboard = () => {
         </Grid>
 
         {/* Vital Signs Summary Table */}
-        <Grid item xs={12}>
+        {/* <Grid item xs={12}>
           <VitalSignsTable />
-        </Grid>
+        </Grid> */}
 
         {/* Patients in Beds Table */}
         <Grid item xs={12}>

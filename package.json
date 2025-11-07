@@ -13,7 +13,12 @@
     "start": "concurrently \"npm run start:server\" \"npm run start:client\"",
     "start:client": "cd client && npm run dev",
     "start:server": "cd server && npm start",
-    "build": "cd client && npm run build"
+    "build": "cd client && npm run build",
+    "flush-db": "node server/scripts/flushAllTables.js",
+    "init-db": "node server/scripts/initializeDatabase.js",
+    "init-vital-signs": "node server/scripts/initializeVitalSignsConfig.js",
+    "reset-and-start": "node server/scripts/flushAllTables.js && node server/scripts/initializeVitalSignsConfig.js && node server/scripts/initializeDatabase.js && concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "reset": "node server/scripts/flushAllTables.js && node server/scripts/initializeVitalSignsConfig.js && node server/scripts/initializeDatabase.js"
   },
   "keywords": [],
   "author": "",

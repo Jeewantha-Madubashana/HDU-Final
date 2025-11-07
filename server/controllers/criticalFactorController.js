@@ -5,6 +5,7 @@ import {
   AuditLog,
   sequelize,
   BedMySQL,
+  VitalSignsConfig,
 } from "../config/mysqlDB.js";
 import { Op } from "sequelize";
 
@@ -56,6 +57,53 @@ const logAudit = async (
   }
 };
 
+// Get standard fields dynamically from CriticalFactor model attributes
+// These are the actual database columns (excluding metadata fields)
+const getStandardFields = () => {
+  // Metadata fields that are not vital signs
+  const metadataFields = ['id', 'patientId', 'recordedAt', 'recordedBy', 'isAmended', 
+    'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'createdAt', 'updatedAt'];
+  
+  // Get all attributes from the CriticalFactor model
+  const modelAttributes = Object.keys(CriticalFactor.rawAttributes || {});
+  
+  // Return only vital sign fields (exclude metadata)
+  return modelAttributes.filter(attr => !metadataFields.includes(attr));
+};
+
+// Helper function to separate standard fields from dynamic fields
+const separateFields = (data) => {
+  const standardData = {};
+  const dynamicData = {};
+  const standardFields = getStandardFields();
+  const metadataFields = ['id', 'patientId', 'recordedAt', 'recordedBy', 'isAmended', 
+    'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'createdAt', 'updatedAt'];
+  
+  for (const key in data) {
+    // If it's a metadata field or a standard vital sign field, store in standardData
+    if (metadataFields.includes(key) || standardFields.includes(key)) {
+      standardData[key] = data[key];
+    } else if (data[key] !== null && data[key] !== undefined && data[key] !== '') {
+      // Store non-standard fields in dynamicVitals
+      dynamicData[key] = data[key];
+    }
+  }
+  
+  return { standardData, dynamicData };
+};
+
+// Helper function to merge dynamic vitals back into the response
+const mergeDynamicVitals = (factor) => {
+  const factorJson = factor.toJSON ? factor.toJSON() : factor;
+  const dynamicVitals = factorJson.dynamicVitals || {};
+  
+  // Merge dynamic vitals into the main object
+  return {
+    ...factorJson,
+    ...dynamicVitals
+  };
+};
+
 export const addCriticalFactors = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -76,15 +124,19 @@ export const addCriticalFactors = async (req, res) => {
       : [criticalFactorsData];
 
     for (const factorData of factorsToCreate) {
-      const newFactor = await CriticalFactor.create(
-        {
-          ...factorData,
-          patientId,
-          recordedBy: userId,
-          recordedAt: new Date(),
-        },
-        { transaction: t }
-      );
+      // Separate standard fields from dynamic fields
+      const { standardData, dynamicData } = separateFields(factorData);
+      
+      // Prepare data for creation
+      const createData = {
+        ...standardData,
+        patientId,
+        recordedBy: userId,
+        recordedAt: new Date(),
+        dynamicVitals: Object.keys(dynamicData).length > 0 ? dynamicData : null,
+      };
+
+      const newFactor = await CriticalFactor.create(createData, { transaction: t });
 
       const createdFactor = await CriticalFactor.findByPk(newFactor.id, {
         transaction: t,
@@ -101,7 +153,8 @@ export const addCriticalFactors = async (req, res) => {
         t
       );
 
-      createdFactors.push(createdFactor);
+      // Merge dynamic vitals back into response
+      createdFactors.push(mergeDynamicVitals(createdFactor));
     }
 
     await t.commit();
@@ -133,7 +186,10 @@ export const getCriticalFactorsByPatientId = async (req, res) => {
         .status(404)
         .json({ message: "No critical factors found for this patient" });
     }
-    res.json(factors);
+    
+    // Merge dynamic vitals into each factor
+    const factorsWithDynamicVitals = factors.map(factor => mergeDynamicVitals(factor));
+    res.json(factorsWithDynamicVitals);
   } catch (error) {
     console.error("Error fetching critical factors:", error);
     res.status(500).json({ message: "Server error", error: error.message });
@@ -181,12 +237,22 @@ export const updateCriticalFactors = async (req, res) => {
 
     const oldValues = factor.toJSON();
 
-    updatedData.isAmended = true;
-    updatedData.amendedBy = userId;
-    updatedData.amendedAt = new Date();
-    updatedData.amendmentReason = amendmentReason;
+    // Separate standard fields from dynamic fields
+    const { standardData, dynamicData } = separateFields(updatedData);
+    
+    // Prepare update data
+    const updateData = {
+      ...standardData,
+      isAmended: true,
+      amendedBy: userId,
+      amendedAt: new Date(),
+      amendmentReason: amendmentReason,
+      dynamicVitals: Object.keys(dynamicData).length > 0 
+        ? { ...(factor.dynamicVitals || {}), ...dynamicData }
+        : factor.dynamicVitals,
+    };
 
-    await factor.update(updatedData, { transaction: t });
+    await factor.update(updateData, { transaction: t });
 
     const newValues = factor.toJSON();
 
@@ -202,7 +268,8 @@ export const updateCriticalFactors = async (req, res) => {
     );
 
     await t.commit();
-    res.json(factor);
+    // Merge dynamic vitals back into response
+    res.json(mergeDynamicVitals(factor));
   } catch (error) {
     await t.rollback();
     console.error("Error updating critical factors:", error);
@@ -285,44 +352,155 @@ export const getCriticalFactorAuditHistory = async (req, res) => {
   }
 };
 
+// Helper function to check if a value is outside normal range
+const isValueCritical = (value, config) => {
+  if (value === null || value === undefined || value === '') {
+    return false;
+  }
+  
+  const numValue = parseFloat(value);
+  if (isNaN(numValue)) {
+    return false;
+  }
+  
+  if (config.normalRangeMax !== null && numValue > config.normalRangeMax) {
+    return true;
+  }
+  
+  if (config.normalRangeMin !== null && numValue < config.normalRangeMin) {
+    return true;
+  }
+  
+  return false;
+};
+
 export async function getCriticalPatients(req, res) {
   try {
-    const criticalFactors = await CriticalFactor.findAll({
-      where: {
-        // Define critical thresholds
-        [Op.or]: [
-          { heartRate: { [Op.gt]: 120 } },
-          { heartRate: { [Op.lt]: 60 } },
-          { respiratoryRate: { [Op.gt]: 25 } },
-          { respiratoryRate: { [Op.lt]: 12 } },
-          { bloodPressureSystolic: { [Op.gt]: 140 } },
-          { bloodPressureSystolic: { [Op.lt]: 90 } },
-          { bloodPressureDiastolic: { [Op.gt]: 90 } },
-          { bloodPressureDiastolic: { [Op.lt]: 60 } },
-          { spO2: { [Op.lt]: 95 } },
-          { temperature: { [Op.gt]: 38.5 } },
-          { temperature: { [Op.lt]: 35.5 } },
-          { glasgowComaScale: { [Op.lt]: 13 } },
-          { painScale: { [Op.gt]: 7 } },
-          { bloodGlucose: { [Op.gt]: 200 } },
-          { bloodGlucose: { [Op.lt]: 70 } },
-        ],
-      },
-      include: [
-        {
-          model: Patient,
-          as: "patient",
-          attributes: ["id", "patientNumber", "fullName", "gender", "contactNumber"],
-        },
-      ],
-      order: [["recordedAt", "DESC"]],
+    // Fetch active vital signs configuration to get dynamic normal ranges
+    const vitalSignsConfigs = await VitalSignsConfig.findAll({
+      where: { isActive: true },
+      order: [["displayOrder", "ASC"]],
     });
+
+    // Build dynamic query conditions based on vital signs config
+    // Get valid database column fields dynamically from the model
+    const validCriticalFactorFields = getStandardFields();
+    
+    const criticalConditions = [];
+    const dynamicFieldConfigs = new Map(); // Store configs for dynamic fields
+    
+    for (const config of vitalSignsConfigs) {
+      const fieldName = config.name;
+      
+      // Check if field exists as a database column (can be queried directly)
+      if (validCriticalFactorFields.includes(fieldName)) {
+        // Standard field - add to query conditions
+        if (config.normalRangeMin !== null || config.normalRangeMax !== null) {
+          const fieldConditions = [];
+          
+          if (config.normalRangeMax !== null) {
+            fieldConditions.push({
+              [fieldName]: { [Op.gt]: config.normalRangeMax },
+            });
+          }
+          
+          if (config.normalRangeMin !== null) {
+            fieldConditions.push({
+              [fieldName]: { [Op.lt]: config.normalRangeMin },
+            });
+          }
+          
+          if (fieldConditions.length > 0) {
+            criticalConditions.push(...fieldConditions);
+          }
+        }
+      } else {
+        // Dynamic field (stored in JSON) - store config for post-query filtering
+        dynamicFieldConfigs.set(fieldName, config);
+      }
+    }
+
+    // No hardcoded fallback - all vital signs are managed dynamically by super admin
+    // If no config exists, return empty array (no critical patients)
+
+    // Fetch all recent critical factors (for standard fields)
+    let criticalFactors = [];
+    if (criticalConditions.length > 0) {
+      criticalFactors = await CriticalFactor.findAll({
+        where: {
+          [Op.or]: criticalConditions,
+        },
+        include: [
+          {
+            model: Patient,
+            as: "patient",
+            attributes: ["id", "patientNumber", "fullName", "gender", "contactNumber"],
+          },
+          {
+            model: User,
+            as: "recorder",
+            attributes: ["id", "username", "nameWithInitials"],
+          },
+        ],
+        order: [["recordedAt", "DESC"]],
+      });
+    }
+    
+    // Also fetch recent factors that might have critical dynamic vitals
+    // We'll check all recent factors (last 24 hours) for dynamic field critical values
+    if (dynamicFieldConfigs.size > 0) {
+      const recentFactors = await CriticalFactor.findAll({
+        where: {
+          recordedAt: {
+            [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+          },
+        },
+        include: [
+          {
+            model: Patient,
+            as: "patient",
+            attributes: ["id", "patientNumber", "fullName", "gender", "contactNumber"],
+          },
+          {
+            model: User,
+            as: "recorder",
+            attributes: ["id", "username", "nameWithInitials"],
+          },
+        ],
+        order: [["recordedAt", "DESC"]],
+      });
+      
+      // Check dynamic vitals for critical values
+      for (const factor of recentFactors) {
+        const factorWithDynamic = mergeDynamicVitals(factor);
+        const dynamicVitals = factor.dynamicVitals || {};
+        
+        let hasCriticalDynamicValue = false;
+        for (const [fieldName, config] of dynamicFieldConfigs.entries()) {
+          const value = dynamicVitals[fieldName];
+          if (isValueCritical(value, config)) {
+            hasCriticalDynamicValue = true;
+            break;
+          }
+        }
+        
+        if (hasCriticalDynamicValue) {
+          // Add to critical factors if not already included
+          const alreadyIncluded = criticalFactors.some(cf => cf.id === factor.id);
+          if (!alreadyIncluded) {
+            criticalFactors.push(factor);
+          }
+        }
+      }
+    }
 
     // Group by patient and get the latest critical factors
     const criticalPatients = [];
     const patientMap = new Map();
 
     criticalFactors.forEach((factor) => {
+      // Merge dynamic vitals into the factor object
+      const factorWithDynamic = mergeDynamicVitals(factor);
       const patientId = factor.patientId;
       if (!patientMap.has(patientId)) {
         patientMap.set(patientId, {
@@ -335,20 +513,36 @@ export async function getCriticalPatients(req, res) {
       }
 
       const patient = patientMap.get(patientId);
-      patient.criticalFactors.push({
+      // Include all vital signs including dynamic ones
+      const criticalFactorData = {
         id: factor.id,
         recordedAt: factor.recordedAt,
-        heartRate: factor.heartRate,
-        respiratoryRate: factor.respiratoryRate,
-        bloodPressureSystolic: factor.bloodPressureSystolic,
-        bloodPressureDiastolic: factor.bloodPressureDiastolic,
-        spO2: factor.spO2,
-        temperature: factor.temperature,
-        glasgowComaScale: factor.glasgowComaScale,
-        painScale: factor.painScale,
-        bloodGlucose: factor.bloodGlucose,
-        urineOutput: factor.urineOutput,
-      });
+        heartRate: factorWithDynamic.heartRate,
+        respiratoryRate: factorWithDynamic.respiratoryRate,
+        bloodPressureSystolic: factorWithDynamic.bloodPressureSystolic,
+        bloodPressureDiastolic: factorWithDynamic.bloodPressureDiastolic,
+        spO2: factorWithDynamic.spO2,
+        temperature: factorWithDynamic.temperature,
+        glasgowComaScale: factorWithDynamic.glasgowComaScale,
+        painScale: factorWithDynamic.painScale,
+        bloodGlucose: factorWithDynamic.bloodGlucose,
+        urineOutput: factorWithDynamic.urineOutput,
+        recorder: factor.recorder ? {
+          id: factor.recorder.id,
+          username: factor.recorder.username,
+          nameWithInitials: factor.recorder.nameWithInitials,
+        } : null,
+      };
+      
+      // Add dynamic vitals (all fields that are not standard)
+      const dynamicVitals = factor.dynamicVitals || {};
+      for (const key in dynamicVitals) {
+        if (dynamicVitals[key] !== null && dynamicVitals[key] !== undefined && dynamicVitals[key] !== '') {
+          criticalFactorData[key] = dynamicVitals[key];
+        }
+      }
+      
+      patient.criticalFactors.push(criticalFactorData);
     });
 
     // Convert map to array
