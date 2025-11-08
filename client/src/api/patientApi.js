@@ -132,4 +132,44 @@ export const dischargePatient = async (patientId, dischargeData) => {
     console.error("Error discharging patient:", errorMessage);
     throw new Error(errorMessage);
   }
+};
+
+/**
+ * Updates incomplete patient data
+ * Used to complete urgent admissions with full patient information
+ * @param {number} patientId - The patient's ID
+ * @param {object} patientData - Complete patient data
+ * @returns {Promise} - Promise with the update response
+ */
+export const updateIncompletePatient = async (patientId, patientData) => {
+  try {
+    const response = await apiClient.put(`/patients/${patientId}/update-incomplete`, patientData);
+    return response.data;
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to update patient data";
+    console.error("Error updating patient data:", errorMessage);
+    throw new Error(errorMessage);
+  }
+};
+
+/**
+ * Fetches change history for a patient
+ * @param {number} patientId - The patient's ID
+ * @returns {Promise} - Promise with the change history data
+ */
+export const getPatientChangeHistory = async (patientId) => {
+  try {
+    const response = await apiClient.get(`/patients/${patientId}/change-history`);
+    return response.data;
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to fetch patient change history";
+    console.error("Error fetching patient change history:", errorMessage);
+    throw new Error(errorMessage);
+  }
 }; 

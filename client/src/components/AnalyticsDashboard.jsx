@@ -208,27 +208,15 @@ const AnalyticsDashboard = () => {
       setBeds(bedsData);
 
       const vitalSignsTrends = {
-        heartRate: patientAnalytics.vitalSignsTrends?.heartRate?.length > 0 
-          ? patientAnalytics.vitalSignsTrends.heartRate 
-          : mockVitalSignsData.heartRate,
-        bloodPressure: patientAnalytics.vitalSignsTrends?.bloodPressure?.length > 0 
-          ? patientAnalytics.vitalSignsTrends.bloodPressure 
-          : mockVitalSignsData.bloodPressure,
-        temperature: patientAnalytics.vitalSignsTrends?.temperature?.length > 0 
-          ? patientAnalytics.vitalSignsTrends.temperature 
-          : mockVitalSignsData.temperature,
-        spO2: patientAnalytics.vitalSignsTrends?.spO2?.length > 0 
-          ? patientAnalytics.vitalSignsTrends.spO2 
-                : mockVitalSignsData.spO2,
+        heartRate: patientAnalytics.vitalSignsTrends?.heartRate || [],
+        bloodPressure: patientAnalytics.vitalSignsTrends?.bloodPressure || [],
+        temperature: patientAnalytics.vitalSignsTrends?.temperature || [],
+        spO2: patientAnalytics.vitalSignsTrends?.spO2 || [],
       };
 
       const demographics = {
-        ageGroups: patientAnalytics.ageGroups?.length > 0 
-          ? patientAnalytics.ageGroups 
-          : mockPatientDemographics.ageGroups,
-        gender: patientAnalytics.genderDistribution?.length > 0 
-          ? patientAnalytics.genderDistribution 
-          : mockPatientDemographics.gender,
+        ageGroups: patientAnalytics.ageGroups || [],
+        gender: patientAnalytics.genderDistribution || [],
       };
 
       setAnalyticsData({

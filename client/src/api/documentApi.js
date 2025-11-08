@@ -72,3 +72,20 @@ export const deletePatientDocument = async (documentId) => {
     throw new Error(errorMessage);
   }
 };
+
+export const updatePatientDocument = async (documentId, updateData) => {
+  try {
+    const response = await apiClient.put(
+      `/documents/documents/${documentId}`,
+      updateData
+    );
+    return response.data;
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to update document";
+    console.error("Error updating document:", errorMessage);
+    throw new Error(errorMessage);
+  }
+};

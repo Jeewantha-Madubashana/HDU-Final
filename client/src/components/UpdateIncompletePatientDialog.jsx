@@ -6,41 +6,37 @@ import {
   DialogActions,
   Button,
   Box,
-  Grid,
   Typography,
+  Alert,
+  CircularProgress,
   IconButton,
   Divider,
+  Paper,
+  Grid,
+  Chip,
+  Tabs,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Chip,
-  CircularProgress,
-  Alert,
-  Tabs,
-  Tab,
 } from "@mui/material";
 import {
   Close as CloseIcon,
-  Person,
-  Phone,
-  Email,
-  LocationOn,
-  MedicalServices,
+  Person as PersonIcon,
+  Contacts as ContactsIcon,
+  Medication as MedicationIcon,
+  Hotel as HotelIcon,
   History as HistoryIcon,
-  Medication,
-  Bloodtype,
-  PregnantWoman,
-  Warning,
-  ContactEmergency,
-  LocalHospital,
-  CalendarToday,
-  Assignment as AssignmentIcon,
   Edit as EditIcon,
   ArrowBack as ArrowBackIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  LocationOn as LocationIcon,
+  CalendarToday as CalendarIcon,
+  Assignment as AssignmentIcon,
   Badge,
   CreditCard,
   Cake,
@@ -49,15 +45,20 @@ import {
   Groups,
   Business,
   PersonPin,
+  Warning,
+  Bloodtype,
+  PregnantWoman,
+  MedicalServices,
+  LocalHospital,
+  ContactEmergency,
 } from "@mui/icons-material";
-import { fetchLatestVitalSigns } from "../api/vitalSignsApi";
-import { getPatientById, updateIncompletePatient } from "../api/patientApi";
+import { Formik, Form } from "formik";
+import * as Yup from "yup";
+import { updateIncompletePatient, getPatientById } from "../api/patientApi";
 import { getConsultants } from "../api/authApi";
 import { uploadPatientDocuments } from "../api/documentApi";
 import { useSelector, useDispatch } from "react-redux";
 import { showToast } from "../features/ui/uiSlice";
-import { Formik, Form } from "formik";
-import * as Yup from "yup";
 import FormSection from "./NurseDashboardForms/PatientDialog/components/FormSection";
 import DocumentUpload from "./NurseDashboardForms/PatientDialog/components/DocumentUpload";
 import PatientChangeHistory from "./PatientChangeHistory";
@@ -69,20 +70,38 @@ import {
   admissionFields,
 } from "./NurseDashboardForms/PatientDialog/config/formFields";
 
-const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) => {
-  const [criticalFactors, setCriticalFactors] = useState([]);
-  const [loadingFactors, setLoadingFactors] = useState(false);
-  const [error, setError] = useState(null);
-  const [tabValue, setTabValue] = useState(0);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+/**
+ * Dialog component for updating incomplete patient data
+ * Used to complete urgent admissions with full patient information
+ * Includes all sections: Patient Details, Emergency Contact, Medical Information, Admission Details, and Document Upload
+ * Uses the same styling and components as the "Assign Patient to Bed" form for consistency
+ * @param {boolean} open - Controls dialog visibility
+ * @param {Function} onClose - Callback when dialog is closed
+ * @param {number} patientId - ID of the incomplete patient
+ * @param {Function} onUpdate - Callback after successful update to refresh parent data
+ */
+const UpdateIncompletePatientDialog = ({ open, onClose, patientId, onUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState(null);
-  const [patientData, setPatientData] = useState(null);
+  const [error, setError] = useState(null);
   const [consultants, setConsultants] = useState([]);
   const [isLoadingConsultants, setIsLoadingConsultants] = useState(true);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
+  const [patientData, setPatientData] = useState(null);
   const dispatch = useDispatch();
+  const token = useSelector((state) => state.auth.token);
+
+  useEffect(() => {
+    if (open) {
+      setIsEditMode(false);
+      setShowHistory(false);
+      setError(null);
+      setTabValue(0);
+    }
+  }, [open, patientId]);
 
   const [initialValues, setInitialValues] = useState({
     fullName: "",
@@ -137,18 +156,6 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
   });
 
   useEffect(() => {
-    if (open) {
-      setIsEditMode(false);
-      setShowHistory(false);
-      setError(null);
-      if (patient?.id) {
-        fetchPatientData();
-        fetchCriticalFactors();
-      }
-    }
-  }, [open, patient?.id]);
-
-  useEffect(() => {
     const fetchConsultants = async () => {
       try {
         setIsLoadingConsultants(true);
@@ -167,77 +174,66 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
   }, [open]);
 
   const fetchPatientData = async () => {
-    if (!patient?.id) return;
-    
-    setFetching(true);
-    setError(null);
-    try {
-      const patientData = await getPatientById(patient.id);
-      
-      if (patientData) {
-        setPatientData(patientData);
+    if (open && patientId) {
+      setFetching(true);
+      setError(null);
+      try {
+        const patient = await getPatientById(patientId);
         
-        const emergencyContact = patientData.emergencyContacts?.[0] || patientData.EmergencyContacts?.[0];
-        const medicalRecord = patientData.medicalRecords?.[0] || patientData.MedicalRecord;
-        const admission = patientData.admissions?.[0] || patientData.Admissions?.[0];
-        
-        const admissionDateTime = admission?.admissionDateTime 
-          ? new Date(admission.admissionDateTime).toISOString().slice(0, 16)
-          : "";
+        if (patient) {
+          setPatientData(patient);
+          
+          const emergencyContact = patient.emergencyContacts?.[0] || patient.EmergencyContacts?.[0];
+          const medicalRecord = patient.medicalRecords?.[0] || patient.MedicalRecord;
+          const admission = patient.admissions?.[0] || patient.Admissions?.[0];
+          
+          const admissionDateTime = admission?.admissionDateTime 
+            ? new Date(admission.admissionDateTime).toISOString().slice(0, 16)
+            : "";
 
-        const initialData = {
-          fullName: patientData.fullName || "",
-          nicPassport: patientData.nicPassport || "",
-          dateOfBirth: patientData.dateOfBirth ? (patientData.dateOfBirth.includes('T') ? patientData.dateOfBirth.split('T')[0] : patientData.dateOfBirth) : "",
-          age: patientData.age || "",
-          gender: patientData.gender || "",
-          maritalStatus: patientData.maritalStatus || "Unknown",
-          contactNumber: patientData.contactNumber || "",
-          email: patientData.email || "",
-          address: patientData.address || "",
-          emergencyContactName: emergencyContact?.name || "",
-          emergencyContactRelationship: emergencyContact?.relationship || "",
-          emergencyContactNumber: emergencyContact?.contactNumber || "",
-          knownAllergies: medicalRecord?.knownAllergies || "",
-          medicalHistory: medicalRecord?.medicalHistory || "",
-          currentMedications: medicalRecord?.currentMedications || "",
-          pregnancyStatus: medicalRecord?.pregnancyStatus || "Not Applicable",
-          bloodType: medicalRecord?.bloodType || "Unknown",
-          initialDiagnosis: medicalRecord?.initialDiagnosis || "",
-          admissionDateTime: admissionDateTime,
-          department: admission?.department || "HDU",
-          consultantInCharge: admission?.consultantInCharge || "",
-          medicalReports: null,
-          idProof: null,
-          consentForm: null,
-          other: null,
-        };
-        
-        setInitialValues(initialData);
+          const initialData = {
+            fullName: patient.fullName || "",
+            nicPassport: patient.nicPassport || "",
+            dateOfBirth: patient.dateOfBirth ? (patient.dateOfBirth.includes('T') ? patient.dateOfBirth.split('T')[0] : patient.dateOfBirth) : "",
+            age: patient.age || "",
+            gender: patient.gender || "",
+            maritalStatus: patient.maritalStatus || "Unknown",
+            contactNumber: patient.contactNumber || "",
+            email: patient.email || "",
+            address: patient.address || "",
+            emergencyContactName: emergencyContact?.name || "",
+            emergencyContactRelationship: emergencyContact?.relationship || "",
+            emergencyContactNumber: emergencyContact?.contactNumber || "",
+            knownAllergies: medicalRecord?.knownAllergies || "",
+            medicalHistory: medicalRecord?.medicalHistory || "",
+            currentMedications: medicalRecord?.currentMedications || "",
+            pregnancyStatus: medicalRecord?.pregnancyStatus || "Not Applicable",
+            bloodType: medicalRecord?.bloodType || "Unknown",
+            initialDiagnosis: medicalRecord?.initialDiagnosis || "",
+            admissionDateTime: admissionDateTime,
+            department: admission?.department || "HDU",
+            consultantInCharge: admission?.consultantInCharge || "",
+            medicalReports: null,
+            idProof: null,
+            consentForm: null,
+            other: null,
+          };
+          
+          setInitialValues(initialData);
+        }
+      } catch (err) {
+        console.error("Error fetching patient data:", err);
+        setError(err.message || "Failed to fetch patient data");
+      } finally {
+        setFetching(false);
       }
-    } catch (err) {
-      console.error("Error fetching patient data:", err);
-      setError(err.message || "Failed to fetch patient data");
-    } finally {
-      setFetching(false);
     }
   };
 
-  const fetchCriticalFactors = async () => {
-    if (!patient?.id) return;
-    
-    setLoadingFactors(true);
-    setError(null);
-    try {
-      const factors = await fetchLatestVitalSigns(patient.id);
-      setCriticalFactors(Array.isArray(factors) ? factors : []);
-    } catch (err) {
-      setError(err.message || "Failed to fetch critical factors history");
-      setCriticalFactors([]);
-    } finally {
-      setLoadingFactors(false);
-    }
-  };
+  useEffect(() => {
+    fetchPatientData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, patientId]);
 
   const getAdmissionFieldsWithConsultants = () => {
     return admissionFields.map(field => {
@@ -262,17 +258,6 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
       }
       return field;
     });
-  };
-
-  const handleEditClick = () => {
-    setIsEditMode(true);
-    setShowHistory(false);
-    setTabValue(0);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditMode(false);
-    fetchPatientData();
   };
 
   const DetailItem = ({ label, value, icon, placeholder }) => {
@@ -436,7 +421,15 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
     </Paper>
   );
 
-  if (!patient) return null;
+  const handleEditClick = () => {
+    setIsEditMode(true);
+    setShowHistory(false);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    fetchPatientData();
+  };
 
   return (
     <Dialog
@@ -446,8 +439,9 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
       fullWidth
       PaperProps={{
         sx: {
+          borderRadius: 2,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
           maxHeight: "90vh",
-          borderRadius: "8px",
         },
       }}
     >
@@ -465,15 +459,10 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", flex: 1 }}>
-          <Person sx={{ mr: 1, color: "white" }} />
-          <Box>
-            <Typography variant="h6" sx={{ color: "white", fontWeight: "bold" }}>
-              {isEditMode ? "Edit Patient Information" : "Patient Details"} - {patient.fullName || "N/A"}
-            </Typography>
-            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.9)" }}>
-              Bed: {bedNumber || "N/A"} | Patient ID: {patient.patientNumber || "N/A"}
-            </Typography>
-          </Box>
+          <PersonIcon sx={{ mr: 1, color: "white" }} />
+          <Typography component="h1" variant="h6" fontWeight="bold">
+            {isEditMode ? "Edit Patient Information" : "Patient Information"}
+          </Typography>
           {isEditMode && (
             <Chip 
               label="Edit Mode" 
@@ -517,7 +506,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                 Back to Patient Details
               </Button>
             </Box>
-            <PatientChangeHistory patientId={patient?.id} />
+            <PatientChangeHistory patientId={patientId} />
           </Box>
         ) : isEditMode ? (
           <Formik
@@ -570,7 +559,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                   consultantInCharge: patientData.consultantInCharge || null,
                 };
 
-                await updateIncompletePatient(patient.id, normalizedData);
+                await updateIncompletePatient(patientId, normalizedData);
 
                 const hasDocuments = 
                   (fileData.medicalReports && fileData.medicalReports.length > 0) ||
@@ -607,7 +596,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                       });
                     }
 
-                    await uploadPatientDocuments(patient.id, formData);
+                    await uploadPatientDocuments(patientId, formData);
                     setUploadStatus("success");
                   } catch (uploadError) {
                     setUploadStatus("error");
@@ -678,21 +667,21 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                 <Divider sx={{ mb: 4 }} />
 
                 <FormSection
-                  icon={<Person color="primary" fontSize="large" />}
+                  icon={<PersonIcon color="primary" fontSize="large" />}
                   title="Patient Details"
                   fields={patientDetailsFields.filter(field => field.name !== 'patientNumber')}
                   formProps={formikProps}
                 />
 
                 <FormSection
-                  icon={<ContactEmergency color="primary" fontSize="large" />}
+                  icon={<ContactsIcon color="primary" fontSize="large" />}
                   title="Emergency Contact Information"
                   fields={emergencyContactFields}
                   formProps={formikProps}
                 />
 
                 <FormSection
-                  icon={<Medication color="primary" fontSize="large" />}
+                  icon={<MedicationIcon color="primary" fontSize="large" />}
                   title="Medical Information"
                   fields={[
                     ...medicalInfoFields,
@@ -709,7 +698,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                 />
 
                 <FormSection
-                  icon={<LocalHospital color="primary" fontSize="large" />}
+                  icon={<HotelIcon color="primary" fontSize="large" />}
                   title="Admission Details"
                   fields={getAdmissionFieldsWithConsultants().filter(field => field.name !== 'bedNumber' && field.name !== 'initialDiagnosis')}
                   formProps={formikProps}
@@ -718,7 +707,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                 <DocumentUpload
                   formProps={formikProps}
                   uploadStatus={uploadStatus}
-                  patientId={patient?.id}
+                  patientId={patientId}
                   onUpdate={async () => {
                     await fetchPatientData();
                     if (onUpdate) {
@@ -749,7 +738,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
               </Alert>
             )}
             
-            {patientData && (
+            {patientData && !isEditMode && !showHistory && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3, gap: 2 }}>
                   <Button
@@ -779,294 +768,125 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
                   sx={{ mb: 3 }}
                 >
                   <Tab label="Patient Information" />
-                  <Tab label="Clinical History (Critical Factors)" />
                   <Tab label="Documents" />
                 </Tabs>
 
                 {/* Patient Information Tab */}
                 {tabValue === 0 && (
-          <Box>
-            <Grid container spacing={3}>
-              {/* Patient Details */}
-              <Grid item xs={12} md={6}>
-                <DetailSection
-                  title="Patient Details"
-                  icon={<Person sx={{ color: "primary.main", fontSize: "28px" }} />}
-                >
-                  <DetailItem
-                    label="Full Name"
-                    value={patientData.fullName}
-                    icon={<Person sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Patient ID"
-                    value={patientData.patientNumber}
-                    icon={<Badge sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="NIC/Passport"
-                    value={patientData.nicPassport}
-                    icon={<CreditCard sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Date of Birth"
-                    value={patientData.dateOfBirth ? new Date(patientData.dateOfBirth).toLocaleDateString() : null}
-                    icon={<CalendarToday sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Age"
-                    value={patientData.age}
-                    icon={<Cake sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Gender"
-                    value={patientData.gender}
-                    icon={<Wc sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Marital Status"
-                    value={patientData.maritalStatus}
-                    icon={<Favorite sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Contact Number"
-                    value={patientData.contactNumber}
-                    icon={<Phone sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Email"
-                    value={patientData.email}
-                    icon={<Email sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Address"
-                    value={patientData.address}
-                    icon={<LocationOn sx={{ fontSize: "16px" }} />}
-                  />
-                </DetailSection>
+                  <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <DetailSection
+                    title="Patient Details"
+                    icon={<PersonIcon sx={{ color: "primary.main", fontSize: "28px" }} />}
+                  >
+                    <DetailItem label="Full Name" value={patientData.fullName} icon={<PersonIcon sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="Patient ID" value={patientData.patientNumber} icon={<Badge sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="NIC/Passport" value={patientData.nicPassport} icon={<CreditCard sx={{ fontSize: "16px" }} />} />
+                    <DetailItem 
+                      label="Date of Birth" 
+                      value={patientData.dateOfBirth ? new Date(patientData.dateOfBirth).toLocaleDateString() : null}
+                      icon={<CalendarIcon sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem label="Age" value={patientData.age} icon={<Cake sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="Gender" value={patientData.gender} icon={<Wc sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="Marital Status" value={patientData.maritalStatus} icon={<Favorite sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="Contact Number" value={patientData.contactNumber} icon={<PhoneIcon sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="Email" value={patientData.email} icon={<EmailIcon sx={{ fontSize: "16px" }} />} />
+                    <DetailItem label="Address" value={patientData.address} icon={<LocationIcon sx={{ fontSize: "16px" }} />} />
+                  </DetailSection>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <DetailSection
+                    title="Emergency Contact Information"
+                    icon={<ContactsIcon sx={{ color: "primary.main", fontSize: "28px" }} />}
+                  >
+                    <DetailItem 
+                      label="Name" 
+                      value={patientData.emergencyContacts?.[0]?.name || patientData.EmergencyContacts?.[0]?.name}
+                      icon={<PersonIcon sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Relationship" 
+                      value={patientData.emergencyContacts?.[0]?.relationship || patientData.EmergencyContacts?.[0]?.relationship}
+                      icon={<Groups sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Contact Number" 
+                      value={patientData.emergencyContacts?.[0]?.contactNumber || patientData.EmergencyContacts?.[0]?.contactNumber}
+                      icon={<PhoneIcon sx={{ fontSize: "16px" }} />}
+                    />
+                  </DetailSection>
+
+                  <DetailSection
+                    title="Medical Information"
+                    icon={<MedicationIcon sx={{ color: "primary.main", fontSize: "28px" }} />}
+                  >
+                    <DetailItem 
+                      label="Known Allergies" 
+                      value={patientData.medicalRecords?.[0]?.knownAllergies || patientData.MedicalRecord?.knownAllergies}
+                      icon={<Warning sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Medical History" 
+                      value={patientData.medicalRecords?.[0]?.medicalHistory || patientData.MedicalRecord?.medicalHistory}
+                      icon={<HistoryIcon sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Current Medications" 
+                      value={patientData.medicalRecords?.[0]?.currentMedications || patientData.MedicalRecord?.currentMedications}
+                      icon={<MedicationIcon sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Pregnancy Status" 
+                      value={patientData.medicalRecords?.[0]?.pregnancyStatus || patientData.MedicalRecord?.pregnancyStatus}
+                      icon={<PregnantWoman sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Blood Type" 
+                      value={patientData.medicalRecords?.[0]?.bloodType || patientData.MedicalRecord?.bloodType}
+                      icon={<Bloodtype sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Initial Diagnosis" 
+                      value={patientData.medicalRecords?.[0]?.initialDiagnosis || patientData.MedicalRecord?.initialDiagnosis}
+                      icon={<LocalHospital sx={{ fontSize: "16px" }} />}
+                    />
+                  </DetailSection>
+
+                  <DetailSection
+                    title="Admission Details"
+                    icon={<HotelIcon sx={{ color: "primary.main", fontSize: "28px" }} />}
+                  >
+                    <DetailItem 
+                      label="Admission Date & Time" 
+                      value={patientData.admissions?.[0]?.admissionDateTime 
+                        ? new Date(patientData.admissions[0].admissionDateTime).toLocaleString()
+                        : (patientData.Admissions?.[0]?.admissionDateTime 
+                          ? new Date(patientData.Admissions[0].admissionDateTime).toLocaleString()
+                          : null)}
+                      icon={<CalendarIcon sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Department" 
+                      value={patientData.admissions?.[0]?.department || patientData.Admissions?.[0]?.department}
+                      icon={<Business sx={{ fontSize: "16px" }} />}
+                    />
+                    <DetailItem 
+                      label="Consultant In Charge" 
+                      value={patientData.admissions?.[0]?.consultantInCharge || patientData.Admissions?.[0]?.consultantInCharge}
+                      icon={<PersonPin sx={{ fontSize: "16px" }} />}
+                    />
+                  </DetailSection>
+                </Grid>
               </Grid>
-
-              {/* Emergency Contact and Medical Information */}
-              <Grid item xs={12} md={6}>
-                <DetailSection
-                  title="Emergency Contact Information"
-                  icon={<ContactEmergency sx={{ color: "primary.main", fontSize: "28px" }} />}
-                >
-                  <DetailItem
-                    label="Name"
-                    value={patientData.emergencyContacts?.[0]?.name || patientData.EmergencyContacts?.[0]?.name}
-                    icon={<Person sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Relationship"
-                    value={patientData.emergencyContacts?.[0]?.relationship || patientData.EmergencyContacts?.[0]?.relationship}
-                    icon={<Groups sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Contact Number"
-                    value={patientData.emergencyContacts?.[0]?.contactNumber || patientData.EmergencyContacts?.[0]?.contactNumber}
-                    icon={<Phone sx={{ fontSize: "16px" }} />}
-                  />
-                </DetailSection>
-
-                <DetailSection
-                  title="Medical Information"
-                  icon={<MedicalServices sx={{ color: "primary.main", fontSize: "28px" }} />}
-                >
-                  <DetailItem
-                    label="Known Allergies"
-                    value={patientData.medicalRecords?.[0]?.knownAllergies || patientData.MedicalRecord?.knownAllergies}
-                    icon={<Warning sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Medical History"
-                    value={patientData.medicalRecords?.[0]?.medicalHistory || patientData.MedicalRecord?.medicalHistory}
-                    icon={<HistoryIcon sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Current Medications"
-                    value={patientData.medicalRecords?.[0]?.currentMedications || patientData.MedicalRecord?.currentMedications}
-                    icon={<Medication sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Pregnancy Status"
-                    value={patientData.medicalRecords?.[0]?.pregnancyStatus || patientData.MedicalRecord?.pregnancyStatus}
-                    icon={<PregnantWoman sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Blood Type"
-                    value={patientData.medicalRecords?.[0]?.bloodType || patientData.MedicalRecord?.bloodType}
-                    icon={<Bloodtype sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Initial Diagnosis"
-                    value={patientData.medicalRecords?.[0]?.initialDiagnosis || patientData.MedicalRecord?.initialDiagnosis}
-                    icon={<LocalHospital sx={{ fontSize: "16px" }} />}
-                  />
-                </DetailSection>
-
-                <DetailSection
-                  title="Admission Details"
-                  icon={<AssignmentIcon sx={{ color: "primary.main", fontSize: "28px" }} />}
-                >
-                  <DetailItem
-                    label="Admission Date & Time"
-                    value={patientData.admissions?.[0]?.admissionDateTime 
-                      ? new Date(patientData.admissions[0].admissionDateTime).toLocaleString()
-                      : (patientData.Admissions?.[0]?.admissionDateTime 
-                        ? new Date(patientData.Admissions[0].admissionDateTime).toLocaleString()
-                        : null)}
-                    icon={<CalendarToday sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Department"
-                    value={patientData.admissions?.[0]?.department || patientData.Admissions?.[0]?.department}
-                    icon={<Business sx={{ fontSize: "16px" }} />}
-                  />
-                  <DetailItem
-                    label="Consultant In Charge"
-                    value={patientData.admissions?.[0]?.consultantInCharge || patientData.Admissions?.[0]?.consultantInCharge}
-                    icon={<PersonPin sx={{ fontSize: "16px" }} />}
-                  />
-                </DetailSection>
-              </Grid>
-            </Grid>
-          </Box>
-        )}
-
-                {/* Clinical History Tab - Only show in view mode */}
-                {tabValue === 1 && (
-                  <Box>
-                    <DetailSection
-                      title="Critical Factors History"
-                      icon={<HistoryIcon sx={{ color: "primary.main" }} />}
-                    >
-                      {loadingFactors ? (
-                        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                          <CircularProgress />
-                        </Box>
-                      ) : error ? (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                          {error}
-                        </Alert>
-                      ) : criticalFactors.length === 0 ? (
-                        <Alert severity="info">
-                          No critical factors recorded yet for this patient.
-                        </Alert>
-                      ) : (
-                        <TableContainer component={Paper} variant="outlined">
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell><strong>Date & Time</strong></TableCell>
-                                <TableCell><strong>Recorded By</strong></TableCell>
-                                <TableCell><strong>Heart Rate (bpm)</strong></TableCell>
-                                <TableCell><strong>Blood Pressure (mmHg)</strong></TableCell>
-                                <TableCell><strong>Respiratory Rate</strong></TableCell>
-                                <TableCell><strong>Temperature (°C)</strong></TableCell>
-                                <TableCell><strong>SpO2 (%)</strong></TableCell>
-                                <TableCell><strong>GCS</strong></TableCell>
-                                <TableCell><strong>Pain Scale</strong></TableCell>
-                                <TableCell><strong>Blood Glucose</strong></TableCell>
-                                <TableCell><strong>Urine Output</strong></TableCell>
-                                <TableCell><strong>Status</strong></TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {criticalFactors.map((factor, index) => (
-                                <TableRow
-                                  key={factor.id || index}
-                                  sx={{
-                                    "&:hover": { backgroundColor: "action.hover" },
-                                  }}
-                                >
-                                  <TableCell>
-                                    {factor.recordedAt
-                                      ? new Date(factor.recordedAt).toLocaleString()
-                                      : "N/A"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.recorder?.nameWithInitials ||
-                                      factor.recorder?.username ||
-                                      "N/A"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.heartRate ? `${factor.heartRate}` : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.bloodPressureSystolic &&
-                                    factor.bloodPressureDiastolic
-                                      ? `${factor.bloodPressureSystolic}/${factor.bloodPressureDiastolic}`
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.respiratoryRate ? `${factor.respiratoryRate}` : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.temperature ? `${factor.temperature}` : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.spO2 ? `${factor.spO2}` : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.glasgowComaScale
-                                      ? `${factor.glasgowComaScale}`
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.painScale !== null &&
-                                    factor.painScale !== undefined
-                                      ? `${factor.painScale}/10`
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.bloodGlucose
-                                      ? `${factor.bloodGlucose} mg/dL`
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.urineOutput
-                                      ? `${factor.urineOutput} mL/kg/hr`
-                                      : "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {factor.isAmended ? (
-                                      <Chip
-                                        label="Amended"
-                                        size="small"
-                                        color="warning"
-                                      />
-                                    ) : (
-                                      <Chip
-                                        label="Original"
-                                        size="small"
-                                        color="success"
-                                      />
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      )}
-                    </DetailSection>
-
-                    {criticalFactors.length > 0 && (
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Total Records: {criticalFactors.length}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
                 )}
 
                 {/* Documents Tab */}
-                {!isEditMode && !showHistory && tabValue === 2 && (
+                {!isEditMode && !showHistory && tabValue === 1 && (
                   <Box>
                     <PatientDocumentsTab
-                      patientId={patient?.id}
+                      patientId={patientId}
                       onUpdate={async () => {
                         await fetchPatientData();
                         if (onUpdate) {
@@ -1105,7 +925,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
               form="update-patient-form"
               variant="contained"
               color="primary"
-              disabled={loading || fetching || !patient?.id}
+              disabled={loading || fetching || !patientId}
               sx={{
                 borderRadius: 2,
                 px: 4,
@@ -1139,5 +959,4 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
   );
 };
 
-export default PatientDetailsDialog;
-
+export default UpdateIncompletePatientDialog;

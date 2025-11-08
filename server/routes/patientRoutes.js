@@ -6,6 +6,8 @@ import {
   getAllPatients,
   dischargePatient,
   getAverageLengthOfStay,
+  updateIncompletePatient,
+  getPatientChangeHistory,
 } from "../controllers/patientController.js";
 
 const router = express.Router();
@@ -17,6 +19,10 @@ router.get("/analytics/length-of-stay", protect, authorize(["Nurse", "Medical Of
 router.get("/", protect, authorize(["Nurse", "Medical Officer", "Consultant", "House Officer"]), getAllPatients);
 
 router.get("/:patientId", protect, authorize(["Nurse", "Medical Officer", "Consultant", "House Officer"]), getPatientById);
+
+router.get("/:patientId/change-history", protect, authorize(["Nurse", "Medical Officer", "Consultant", "House Officer"]), getPatientChangeHistory);
+
+router.put("/:patientId/update-incomplete", protect, authorize(["Nurse", "Medical Officer", "Consultant", "House Officer"]), updateIncompletePatient);
 
 router.post("/:patientId/discharge", protect, authorize(["Nurse", "Medical Officer", "Consultant", "House Officer"]), dischargePatient);
 

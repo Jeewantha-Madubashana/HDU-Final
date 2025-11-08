@@ -50,7 +50,7 @@ const defineMedicalRecord = (sequelize) => {
       },
       initialDiagnosis: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
       },
     },
     {

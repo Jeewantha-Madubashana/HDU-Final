@@ -6,7 +6,7 @@ import {
   PatientDocument,
   sequelize,
 } from "../config/mysqlDB.js";
-import { generatePatientNumber } from "../utils/generators.js";
+import { generatePatientNumber, generateUrgentPatientName } from "../utils/generators.js";
 
 class PatientRepository {
   async createPatient(patientData) {
@@ -41,18 +41,35 @@ class PatientRepository {
         consultantInCharge,
       } = patientData;
 
+      // Normalize dateOfBirth - convert empty strings or invalid dates to null
+      let normalizedDateOfBirth = null;
+      if (dateOfBirth) {
+        const date = new Date(dateOfBirth);
+        if (!isNaN(date.getTime())) {
+          normalizedDateOfBirth = date;
+        }
+      }
+
+      // Normalize age - convert empty strings to null
+      const normalizedAge = age && age !== '' ? (typeof age === 'string' ? parseInt(age) : age) : null;
+
+      // For normal admission, fullName and gender are required
+      if (!fullName || !gender) {
+        throw new Error("Full name and gender are required for normal admission");
+      }
+
       const patient = await Patient.create(
         {
           patientNumber,
           fullName,
-          nicPassport,
-          dateOfBirth,
-          age,
+          nicPassport: nicPassport || null,
+          dateOfBirth: normalizedDateOfBirth,
+          age: normalizedAge,
           gender,
           maritalStatus: maritalStatus || "Unknown",
-          contactNumber,
-          email,
-          address,
+          contactNumber: contactNumber || null,
+          email: email || null,
+          address: address || null,
         },
         { transaction }
       );
@@ -78,7 +95,90 @@ class PatientRepository {
           currentMedications: currentMedications || null,
           pregnancyStatus: pregnancyStatus || "Not Applicable",
           bloodType: bloodType || "Unknown",
-          initialDiagnosis,
+          initialDiagnosis: initialDiagnosis || null,
+        },
+        { transaction }
+      );
+
+      // Normalize admissionDateTime
+      let normalizedAdmissionDateTime = new Date();
+      if (admissionDateTime) {
+        const date = new Date(admissionDateTime);
+        if (!isNaN(date.getTime())) {
+          normalizedAdmissionDateTime = date;
+        }
+      }
+
+      const admission = await Admission.create(
+        {
+          patientId: patient.id,
+          admissionDateTime: normalizedAdmissionDateTime,
+          department: department || "HDU",
+          consultantInCharge: consultantInCharge || null,
+          status: "Active",
+        },
+        { transaction }
+      );
+
+      await transaction.commit();
+
+      return {
+        patient,
+        admission,
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  /**
+   * Creates an urgent patient admission with minimal data
+   * Generates a temporary name like "Urgent Admitted Patient #1"
+   * @param {Object} patientData - Minimal patient data (optional)
+   * @returns {Promise<Object>} Created patient and admission
+   */
+  async createUrgentPatient(patientData = {}) {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const patientNumber = await generatePatientNumber();
+      const urgentName = await generateUrgentPatientName();
+
+      const {
+        department = "HDU",
+        consultantInCharge,
+        admissionDateTime,
+        initialDiagnosis,
+      } = patientData;
+
+      const patient = await Patient.create(
+        {
+          patientNumber,
+          fullName: urgentName,
+          nicPassport: null,
+          dateOfBirth: null,
+          age: null,
+          gender: null,
+          maritalStatus: "Unknown",
+          contactNumber: null,
+          email: null,
+          address: null,
+          isUrgentAdmission: true,
+          isIncomplete: true,
+        },
+        { transaction }
+      );
+
+      await MedicalRecord.create(
+        {
+          patientId: patient.id,
+          knownAllergies: null,
+          medicalHistory: null,
+          currentMedications: null,
+          pregnancyStatus: "Not Applicable",
+          bloodType: "Unknown",
+          initialDiagnosis: initialDiagnosis || null,
         },
         { transaction }
       );
@@ -88,7 +188,7 @@ class PatientRepository {
           patientId: patient.id,
           admissionDateTime: admissionDateTime || new Date(),
           department,
-          consultantInCharge,
+          consultantInCharge: consultantInCharge || null,
           status: "Active",
         },
         { transaction }

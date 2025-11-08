@@ -182,6 +182,13 @@ const BedManagementDashboard = () => {
   };
 
   const handleAssignBed = (bed) => {
+    setSelectedBed(bed);
+    dispatch({ type: "patient/setSelectedBed", payload: bed });
+    dispatch({ type: "patient/setDialogOpen", payload: true });
+  };
+
+  const handleUrgentAssign = async () => {
+    await fetchBeds();
   };
 
   const handleDeassignBed = async (bed) => {

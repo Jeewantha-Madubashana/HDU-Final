@@ -32,6 +32,8 @@ export async function getBeds(req, res) {
         "age",
         "maritalStatus",
         "address", 
+        "isUrgentAdmission",
+        "isIncomplete",
         "createdAt"
       ],
       include: [
@@ -161,6 +163,8 @@ export async function getBedById(req, res) {
           "age",
           "maritalStatus",
           "address", 
+          "isUrgentAdmission",
+          "isIncomplete",
           "createdAt"
         ],
         include: [
@@ -281,6 +285,8 @@ export async function getBedsByStatus(req, res) {
         "age",
         "maritalStatus",
         "address", 
+        "isUrgentAdmission",
+        "isIncomplete",
         "createdAt"
       ],
       include: [
@@ -431,11 +437,6 @@ export async function assignBed(req, res) {
       return res.status(400).json({ msg: "Bed ID is required" });
     }
 
-    if (!patientData || Object.keys(patientData).length === 0) {
-      console.error("Patient data is missing or empty");
-      return res.status(400).json({ msg: "Patient data is required" });
-    }
-    
     const bed = await BedMySQL.findOne({ where: { id: bedId } });
     if (!bed) {
       console.error("Bed not found:", bedId);
@@ -448,18 +449,30 @@ export async function assignBed(req, res) {
     }
 
     try {
-      let existingPatient = null;
-      if (patientData.nicPassport) {
-        existingPatient = await Patient.findOne({
-          where: { nicPassport: patientData.nicPassport }
-        });
-      }
-
+      const isUrgentAdmission = patientData.isUrgentAdmission === true;
+      
       let result;
-      if (existingPatient) {
-        result = await patientRepository.createAdmissionForExistingPatient(existingPatient.id, patientData);
+      
+      if (isUrgentAdmission) {
+        result = await patientRepository.createUrgentPatient(patientData);
       } else {
-        result = await patientRepository.createPatient(patientData);
+        if (!patientData || Object.keys(patientData).length === 0) {
+          console.error("Patient data is missing or empty");
+          return res.status(400).json({ msg: "Patient data is required" });
+        }
+
+        let existingPatient = null;
+        if (patientData.nicPassport) {
+          existingPatient = await Patient.findOne({
+            where: { nicPassport: patientData.nicPassport }
+          });
+        }
+
+        if (existingPatient) {
+          result = await patientRepository.createAdmissionForExistingPatient(existingPatient.id, patientData);
+        } else {
+          result = await patientRepository.createPatient(patientData);
+        }
       }
 
       const [updatedCount] = await BedMySQL.update(
@@ -468,11 +481,24 @@ export async function assignBed(req, res) {
       );
 
       if (updatedCount > 0) {
+        let existingPatient = null;
+        if (!isUrgentAdmission && patientData?.nicPassport) {
+          existingPatient = await Patient.findOne({
+            where: { nicPassport: patientData.nicPassport }
+          });
+        }
+        
         return res.json({
-          msg: existingPatient ? "Bed assigned to existing patient successfully" : "Bed assigned successfully",
+          msg: isUrgentAdmission 
+            ? "Urgent patient assigned to bed successfully. Please update patient details later."
+            : existingPatient 
+            ? "Bed assigned to existing patient successfully" 
+            : "Bed assigned successfully",
           patientId: result.patient.id,
           patientNumber: result.patient.patientNumber,
           admissionId: result.admission.id,
+          isUrgentAdmission: isUrgentAdmission || false,
+          isIncomplete: result.patient.isIncomplete || false,
         });
       } else {
         console.error("Failed to update the bed:", bedId);

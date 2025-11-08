@@ -94,6 +94,10 @@ const ConsultantDashboard = () => {
     }
   };
 
+  const handleUrgentAssign = async () => {
+    await fetchBeds();
+  };
+
   const handleSubmit = async (values) => {
     try {
       const dataToSubmit = {
@@ -184,6 +188,7 @@ const ConsultantDashboard = () => {
                   bed={bed}
                   assignBed={handleAssignBed}
                   deassignBed={deAssignBed}
+                  onUrgentAssign={handleUrgentAssign}
                 />
               </Grid>
             ))}

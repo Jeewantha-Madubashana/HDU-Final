@@ -5,6 +5,7 @@ import {
   getPatientDocuments,
   downloadPatientDocument,
   deletePatientDocument,
+  updatePatientDocument,
 } from "../controllers/documentController.js";
 import { authenticateJWT } from "../middleware/auth.js";
 
@@ -28,6 +29,8 @@ router.post(
 router.get("/patients/:patientId/documents", getPatientDocuments);
 
 router.get("/documents/:documentId/download", downloadPatientDocument);
+
+router.put("/documents/:documentId", updatePatientDocument);
 
 router.delete("/documents/:documentId", deletePatientDocument);
 

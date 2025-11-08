@@ -114,8 +114,29 @@ const FormField = ({
       const selectedFiles = event.currentTarget.files;
       
       if (multiple) {
-        const filesArray = Array.from(selectedFiles);
-        setFieldValue(name, filesArray.length > 0 ? filesArray : null);
+        const newFilesArray = Array.from(selectedFiles);
+        // Get existing files for this field
+        const existingFiles = values[name];
+        const existingFilesArray = existingFiles 
+          ? (Array.isArray(existingFiles) ? existingFiles : [existingFiles])
+          : [];
+        
+        // Combine existing files with new files, avoiding duplicates by name
+        const combinedFiles = [...existingFilesArray];
+        newFilesArray.forEach(newFile => {
+          // Check if file with same name already exists
+          const exists = combinedFiles.some(existingFile => 
+            existingFile.name === newFile.name && existingFile.size === newFile.size
+          );
+          if (!exists) {
+            combinedFiles.push(newFile);
+          }
+        });
+        
+        setFieldValue(name, combinedFiles.length > 0 ? combinedFiles : null);
+        
+        // Reset the input to allow selecting the same file again if needed
+        event.target.value = '';
       } else {
         setFieldValue(name, selectedFiles.length > 0 ? selectedFiles[0] : null);
       }
@@ -386,22 +407,6 @@ const FormField = ({
             </MenuItem>
           ))}
       </Field>
-      {touched[name] && errors[name] && (
-        <FormHelperText
-          error
-          sx={{
-            ml: 1.5,
-            mt: 0.5,
-            fontSize: "0.75rem",
-            fontWeight: "500",
-            color: "error.main",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          {errors[name]}
-        </FormHelperText>
-      )}
     </Box>
   );
 };

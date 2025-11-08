@@ -181,6 +181,26 @@ export const uploadPatientDocuments = async (req, res) => {
             uploadedBy: req.user?.id || null,
           });
 
+          // Log document upload in audit log
+          const { AuditLog } = await import("../config/mysqlDB.js");
+          try {
+            await AuditLog.create({
+              userId: req.user?.id || null,
+              action: "CREATE",
+              tableName: "patient_documents",
+              recordId: document.id,
+              oldValues: null,
+              newValues: JSON.stringify({
+                fileName: document.fileName,
+                documentType: document.documentType,
+                fileUrl: document.fileUrl,
+              }),
+              description: `Document uploaded: ${document.fileName} (${documentType})`,
+            });
+          } catch (auditError) {
+            console.error("Error logging document upload:", auditError);
+          }
+
           documentResults.push({
             id: document.id,
             documentType,
@@ -353,6 +373,7 @@ export const downloadPatientDocument = async (req, res) => {
 export const deletePatientDocument = async (req, res) => {
   try {
     const { documentId } = req.params;
+    const userId = req.user?.id;
     
     const document = await PatientDocument.findByPk(documentId);
     
@@ -361,6 +382,26 @@ export const deletePatientDocument = async (req, res) => {
         success: false,
         message: "Document not found"
       });
+    }
+
+    // Log deletion in audit log
+    const { AuditLog } = await import("../config/mysqlDB.js");
+    try {
+      await AuditLog.create({
+        userId: userId || null,
+        action: "DELETE",
+        tableName: "patient_documents",
+        recordId: documentId,
+        oldValues: JSON.stringify({
+          fileName: document.fileName,
+          documentType: document.documentType,
+          fileUrl: document.fileUrl,
+        }),
+        newValues: null,
+        description: `Document deleted: ${document.fileName}`,
+      });
+    } catch (auditError) {
+      console.error("Error logging document deletion:", auditError);
     }
     
     const filePath = path.join(process.cwd(), document.fileUrl.replace('/uploads/', 'uploads/'));
@@ -380,6 +421,86 @@ export const deletePatientDocument = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete document",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Updates document metadata (e.g., fileName)
+ * @route PUT /api/documents/:documentId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.documentId - ID of the document to update
+ * @param {Object} req.body - Update data (e.g., { fileName: "new name" })
+ * @param {Object} res - Express response object
+ */
+export const updatePatientDocument = async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const userId = req.user?.id;
+    const { fileName } = req.body;
+    
+    const document = await PatientDocument.findByPk(documentId);
+    
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: "Document not found"
+      });
+    }
+
+    const oldValues = {
+      fileName: document.fileName,
+      documentType: document.documentType,
+    };
+
+    // Update document
+    if (fileName) {
+      document.fileName = fileName;
+    }
+    
+    await document.save();
+
+    // Log update in audit log
+    const { AuditLog } = await import("../config/mysqlDB.js");
+    try {
+      await AuditLog.create({
+        userId: userId || null,
+        action: "UPDATE",
+        tableName: "patient_documents",
+        recordId: documentId,
+        oldValues: JSON.stringify(oldValues),
+        newValues: JSON.stringify({
+          fileName: document.fileName,
+          documentType: document.documentType,
+        }),
+        description: `Document updated: ${document.fileName}`,
+      });
+    } catch (auditError) {
+      console.error("Error logging document update:", auditError);
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: "Document updated successfully",
+      document: {
+        id: document.id,
+        fileName: document.fileName,
+        documentType: document.documentType,
+        fileUrl: document.fileUrl,
+        fileSize: document.fileSize,
+        fileType: document.fileType,
+        uploadedAt: document.createdAt,
+      }
+    });
+    
+  } catch (error) {
+    console.error("Update error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update document",
       error: error.message,
     });
   }

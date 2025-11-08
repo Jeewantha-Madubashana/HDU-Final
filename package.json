@@ -17,6 +17,7 @@
     "flush-db": "node server/scripts/flushAllTables.js",
     "init-db": "node server/scripts/initializeDatabase.js",
     "init-vital-signs": "node server/scripts/initializeVitalSignsConfig.js",
+    "add-urgent-columns": "node server/scripts/addUrgentAdmissionColumns.js",
     "reset-and-start": "node server/scripts/flushAllTables.js && node server/scripts/initializeVitalSignsConfig.js && node server/scripts/initializeDatabase.js && concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "reset": "node server/scripts/flushAllTables.js && node server/scripts/initializeVitalSignsConfig.js && node server/scripts/initializeDatabase.js"
   },
@@ -25,6 +26,10 @@
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^9.1.0"
+  },
+  "dependencies": {
+    "canvas": "^3.2.0",
+    "docx": "^9.5.1",
+    "pdfkit": "^0.17.2"
   }
 }
-

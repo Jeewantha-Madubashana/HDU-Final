@@ -67,6 +67,10 @@ const NurseDashboard = () => {
     }
   };
 
+  const handleUrgentAssign = async () => {
+    await fetchBeds();
+  };
+
   const handleViewPatientDetails = (bed) => {
   };
 
@@ -136,6 +140,7 @@ const NurseDashboard = () => {
                   bed={bed}
                   assignBed={null}
                   deassignBed={null}
+                  onUrgentAssign={handleUrgentAssign}
                 />
               </Grid>
             ))}
