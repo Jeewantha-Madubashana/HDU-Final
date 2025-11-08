@@ -239,20 +239,20 @@ const VitalSignsManagement = () => {
 
   if (loading && vitalSigns.length === 0) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box sx={{ pt: 3 }} display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
       </Box>
     );
   }
 
   return (
-    <Box>
+    <Box sx={{ pt: 3 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5" gutterBottom>
+        <Typography variant="h5" sx={{ fontWeight: "bold" }}>
           Vital Signs Configuration Management
         </Typography>
-        <Box display="flex" gap={2}>
+        <Box display="flex" gap={2} alignItems="center">
           <Tooltip title="Refresh">
             <IconButton onClick={fetchVitalSigns} disabled={loading}>
               <RefreshIcon />
