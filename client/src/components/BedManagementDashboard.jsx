@@ -42,6 +42,12 @@ import { showToast } from "../features/ui/uiSlice";
 import { useDispatch } from "react-redux";
 import axios from "axios";
 
+/**
+ * Bed Management Dashboard component
+ * Provides interface for viewing, searching, and managing beds
+ * Supports filtering by status and searching by bed number or patient name
+ * @returns {JSX.Element} Bed management dashboard with search and filter capabilities
+ */
 const BedManagementDashboard = () => {
   const [beds, setBeds] = useState([]);
   const [filteredBeds, setFilteredBeds] = useState([]);
@@ -90,10 +96,12 @@ const BedManagementDashboard = () => {
     }
   };
 
+  /**
+   * Filters beds based on search term and status filter
+   */
   const filterBeds = () => {
     let filtered = beds;
 
-    // Filter by status
     if (statusFilter !== "all") {
       filtered = filtered.filter((bed) => {
         if (statusFilter === "occupied") return bed.patientId !== null;
@@ -102,7 +110,6 @@ const BedManagementDashboard = () => {
       });
     }
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter((bed) => {
         const searchLower = searchTerm.toLowerCase();
@@ -175,7 +182,6 @@ const BedManagementDashboard = () => {
   };
 
   const handleAssignBed = (bed) => {
-    // This will be handled by the parent component
   };
 
   const handleDeassignBed = async (bed) => {

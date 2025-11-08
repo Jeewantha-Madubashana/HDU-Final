@@ -111,7 +111,6 @@ const createSuperAdmin = async () => {
     const superAdminUsername = "SUPER_ADMIN";
     const superAdminPassword = 'zV38~6m{~3"';
     
-    // Check if super admin already exists
     const existingSuperAdmin = await UserMySQLModel.findOne({
       where: { username: superAdminUsername },
     });
@@ -149,12 +148,9 @@ const connectMySql = async () => {
     await sequelize.authenticate();
     console.log("MySQL connection has been established successfully.");
 
-    // Temporarily disable sync to avoid "too many keys" error
-    // The tables already exist and have the correct structure
     console.log("Skipping model sync - using existing database structure");
     console.log("All models ready");
 
-    // Create Super Admin
     await createSuperAdmin();
 
     const bedCount = await BedMySQL.count();

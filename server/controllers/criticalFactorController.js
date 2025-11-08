@@ -9,6 +9,12 @@ import {
 } from "../config/mysqlDB.js";
 import { Op } from "sequelize";
 
+/**
+ * Compares old and new values to identify changes for audit logging
+ * @param {Object|null} oldValues - Previous state of the record
+ * @param {Object} newValues - Current state of the record
+ * @returns {Object} Object containing only the changed fields with old/new values
+ */
 const getChangedValues = (oldValues, newValues) => {
   const changes = {};
   for (const key in newValues) {
@@ -22,6 +28,18 @@ const getChangedValues = (oldValues, newValues) => {
   return changes;
 };
 
+/**
+ * Creates an audit log entry for database operations
+ * @param {number} userId - ID of the user performing the action
+ * @param {string} action - Action type (CREATE, UPDATE, ACKNOWLEDGE)
+ * @param {string} tableName - Name of the table being modified
+ * @param {number} recordId - ID of the record being modified
+ * @param {Object|null} oldValues - Previous state (null for CREATE/ACKNOWLEDGE)
+ * @param {Object} newValues - New state or initial values
+ * @param {string} description - Human-readable description of the action
+ * @param {Object} transaction - Sequelize transaction object
+ * @throws {Error} If audit log creation fails
+ */
 const logAudit = async (
   userId,
   action,
@@ -57,21 +75,24 @@ const logAudit = async (
   }
 };
 
-// Get standard fields dynamically from CriticalFactor model attributes
-// These are the actual database columns (excluding metadata fields)
+/**
+ * Dynamically retrieves standard vital sign fields from the CriticalFactor model
+ * Excludes metadata fields to return only actual vital sign database columns
+ * @returns {string[]} Array of field names that are standard vital sign columns
+ */
 const getStandardFields = () => {
-  // Metadata fields that are not vital signs
   const metadataFields = ['id', 'patientId', 'recordedAt', 'recordedBy', 'isAmended', 
     'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'createdAt', 'updatedAt'];
-  
-  // Get all attributes from the CriticalFactor model
   const modelAttributes = Object.keys(CriticalFactor.rawAttributes || {});
-  
-  // Return only vital sign fields (exclude metadata)
   return modelAttributes.filter(attr => !metadataFields.includes(attr));
 };
 
-// Helper function to separate standard fields from dynamic fields
+/**
+ * Separates standard database fields from dynamic vital signs
+ * Standard fields are stored as columns, dynamic fields go into JSON column
+ * @param {Object} data - Input data containing both standard and dynamic fields
+ * @returns {Object} Object with standardData and dynamicData properties
+ */
 const separateFields = (data) => {
   const standardData = {};
   const dynamicData = {};
@@ -80,11 +101,9 @@ const separateFields = (data) => {
     'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'createdAt', 'updatedAt'];
   
   for (const key in data) {
-    // If it's a metadata field or a standard vital sign field, store in standardData
     if (metadataFields.includes(key) || standardFields.includes(key)) {
       standardData[key] = data[key];
     } else if (data[key] !== null && data[key] !== undefined && data[key] !== '') {
-      // Store non-standard fields in dynamicVitals
       dynamicData[key] = data[key];
     }
   }
@@ -92,18 +111,33 @@ const separateFields = (data) => {
   return { standardData, dynamicData };
 };
 
-// Helper function to merge dynamic vitals back into the response
+/**
+ * Merges dynamic vital signs from JSON column back into the main factor object
+ * This allows dynamic fields to be accessed as if they were standard columns
+ * @param {Object} factor - CriticalFactor instance or plain object
+ * @returns {Object} Factor object with dynamic vitals merged in
+ */
 const mergeDynamicVitals = (factor) => {
   const factorJson = factor.toJSON ? factor.toJSON() : factor;
   const dynamicVitals = factorJson.dynamicVitals || {};
   
-  // Merge dynamic vitals into the main object
   return {
     ...factorJson,
     ...dynamicVitals
   };
 };
 
+/**
+ * Creates new critical factor records for a patient
+ * Supports both standard database columns and dynamic vital signs stored in JSON
+ * @route POST /api/critical-factors/:patientId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.patientId - ID of the patient
+ * @param {Object|Array} req.body - Critical factor data (single object or array)
+ * @param {Object} res - Express response object
+ */
 export const addCriticalFactors = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -124,10 +158,8 @@ export const addCriticalFactors = async (req, res) => {
       : [criticalFactorsData];
 
     for (const factorData of factorsToCreate) {
-      // Separate standard fields from dynamic fields
       const { standardData, dynamicData } = separateFields(factorData);
       
-      // Prepare data for creation
       const createData = {
         ...standardData,
         patientId,
@@ -153,7 +185,6 @@ export const addCriticalFactors = async (req, res) => {
         t
       );
 
-      // Merge dynamic vitals back into response
       createdFactors.push(mergeDynamicVitals(createdFactor));
     }
 
@@ -166,6 +197,16 @@ export const addCriticalFactors = async (req, res) => {
   }
 };
 
+/**
+ * Retrieves all critical factor records for a specific patient
+ * Includes recorder information and merges dynamic vital signs
+ * @route GET /api/critical-factors/patient/:patientId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.patientId - ID of the patient
+ * @param {Object} res - Express response object
+ */
 export const getCriticalFactorsByPatientId = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -187,7 +228,6 @@ export const getCriticalFactorsByPatientId = async (req, res) => {
         .json({ message: "No critical factors found for this patient" });
     }
     
-    // Merge dynamic vitals into each factor
     const factorsWithDynamicVitals = factors.map(factor => mergeDynamicVitals(factor));
     res.json(factorsWithDynamicVitals);
   } catch (error) {
@@ -196,6 +236,19 @@ export const getCriticalFactorsByPatientId = async (req, res) => {
   }
 };
 
+/**
+ * Updates an existing critical factor record
+ * Requires an amendment reason for audit trail compliance
+ * Merges dynamic vital signs with existing dynamic data
+ * @route PUT /api/critical-factors/:criticalFactorId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.criticalFactorId - ID of the critical factor record
+ * @param {Object} req.body - Updated critical factor data
+ * @param {string} req.body.amendmentReason - Required reason for the amendment
+ * @param {Object} res - Express response object
+ */
 export const updateCriticalFactors = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -226,11 +279,8 @@ export const updateCriticalFactors = async (req, res) => {
     }
 
     const oldValues = factor.toJSON();
-
-    // Separate standard fields from dynamic fields
     const { standardData, dynamicData } = separateFields(updatedData);
     
-    // Prepare update data
     const updateData = {
       ...standardData,
       isAmended: true,
@@ -258,7 +308,6 @@ export const updateCriticalFactors = async (req, res) => {
     );
 
     await t.commit();
-    // Merge dynamic vitals back into response
     res.json(mergeDynamicVitals(factor));
   } catch (error) {
     await t.rollback();
@@ -267,6 +316,16 @@ export const updateCriticalFactors = async (req, res) => {
   }
 };
 
+/**
+ * Retrieves complete audit history for a critical factor record
+ * Includes all changes, who made them, and when
+ * @route GET /api/critical-factors/:criticalFactorId/audit
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.criticalFactorId - ID of the critical factor record
+ * @param {Object} res - Express response object
+ */
 export const getCriticalFactorAuditHistory = async (req, res) => {
   try {
     const { criticalFactorId } = req.params;
@@ -342,7 +401,12 @@ export const getCriticalFactorAuditHistory = async (req, res) => {
   }
 };
 
-// Helper function to check if a value is outside normal range
+/**
+ * Determines if a vital sign value is outside the configured normal range
+ * @param {string|number|null|undefined} value - The vital sign value to check
+ * @param {Object} config - Vital sign configuration with normalRangeMin/Max
+ * @returns {boolean} True if value is critical (outside normal range)
+ */
 const isValueCritical = (value, config) => {
   if (value === null || value === undefined || value === '') {
     return false;
@@ -364,27 +428,30 @@ const isValueCritical = (value, config) => {
   return false;
 };
 
+/**
+ * Identifies patients with critical vital signs based on dynamic configuration
+ * Checks both standard database columns and dynamic JSON fields
+ * Returns patients grouped with their critical factors and bed assignments
+ * @route GET /api/critical-factors/critical-patients
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getCriticalPatients(req, res) {
   try {
-    // Fetch active vital signs configuration to get dynamic normal ranges
     const vitalSignsConfigs = await VitalSignsConfig.findAll({
       where: { isActive: true },
       order: [["displayOrder", "ASC"]],
     });
 
-    // Build dynamic query conditions based on vital signs config
-    // Get valid database column fields dynamically from the model
     const validCriticalFactorFields = getStandardFields();
-    
     const criticalConditions = [];
-    const dynamicFieldConfigs = new Map(); // Store configs for dynamic fields
+    const dynamicFieldConfigs = new Map();
     
     for (const config of vitalSignsConfigs) {
       const fieldName = config.name;
       
-      // Check if field exists as a database column (can be queried directly)
       if (validCriticalFactorFields.includes(fieldName)) {
-        // Standard field - add to query conditions
         if (config.normalRangeMin !== null || config.normalRangeMax !== null) {
           const fieldConditions = [];
           
@@ -405,15 +472,10 @@ export async function getCriticalPatients(req, res) {
           }
         }
       } else {
-        // Dynamic field (stored in JSON) - store config for post-query filtering
         dynamicFieldConfigs.set(fieldName, config);
       }
     }
 
-    // No hardcoded fallback - all vital signs are managed dynamically by super admin
-    // If no config exists, return empty array (no critical patients)
-
-    // Fetch all recent critical factors (for standard fields)
     let criticalFactors = [];
     if (criticalConditions.length > 0) {
       criticalFactors = await CriticalFactor.findAll({
@@ -436,13 +498,11 @@ export async function getCriticalPatients(req, res) {
       });
     }
     
-    // Also fetch recent factors that might have critical dynamic vitals
-    // We'll check all recent factors (last 24 hours) for dynamic field critical values
     if (dynamicFieldConfigs.size > 0) {
       const recentFactors = await CriticalFactor.findAll({
         where: {
           recordedAt: {
-            [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+            [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000),
           },
         },
         include: [
@@ -460,7 +520,6 @@ export async function getCriticalPatients(req, res) {
         order: [["recordedAt", "DESC"]],
       });
       
-      // Check dynamic vitals for critical values
       for (const factor of recentFactors) {
         const factorWithDynamic = mergeDynamicVitals(factor);
         const dynamicVitals = factor.dynamicVitals || {};
@@ -475,7 +534,6 @@ export async function getCriticalPatients(req, res) {
         }
         
         if (hasCriticalDynamicValue) {
-          // Add to critical factors if not already included
           const alreadyIncluded = criticalFactors.some(cf => cf.id === factor.id);
           if (!alreadyIncluded) {
             criticalFactors.push(factor);
@@ -484,12 +542,10 @@ export async function getCriticalPatients(req, res) {
       }
     }
 
-    // Group by patient and get the latest critical factors
     const criticalPatients = [];
     const patientMap = new Map();
 
     criticalFactors.forEach((factor) => {
-      // Merge dynamic vitals into the factor object
       const factorWithDynamic = mergeDynamicVitals(factor);
       const patientId = factor.patientId;
       if (!patientMap.has(patientId)) {
@@ -497,13 +553,12 @@ export async function getCriticalPatients(req, res) {
           patientId: factor.patient.id,
           patientNumber: factor.patient.patientNumber,
           patientName: factor.patient.fullName,
-          bedNumber: "N/A", // We'll get bed info separately if needed
+          bedNumber: "N/A",
           criticalFactors: [],
         });
       }
 
       const patient = patientMap.get(patientId);
-      // Include all vital signs including dynamic ones
       const criticalFactorData = {
         id: factor.id,
         recordedAt: factor.recordedAt,
@@ -524,7 +579,6 @@ export async function getCriticalPatients(req, res) {
         } : null,
       };
       
-      // Add dynamic vitals (all fields that are not standard)
       const dynamicVitals = factor.dynamicVitals || {};
       for (const key in dynamicVitals) {
         if (dynamicVitals[key] !== null && dynamicVitals[key] !== undefined && dynamicVitals[key] !== '') {
@@ -535,13 +589,11 @@ export async function getCriticalPatients(req, res) {
       patient.criticalFactors.push(criticalFactorData);
     });
 
-    // Convert map to array
     const criticalPatientsArray = [];
     patientMap.forEach((patient) => {
       criticalPatientsArray.push(patient);
     });
 
-    // Fetch bed information for each critical patient
     const criticalPatientsWithBeds = await Promise.all(
       criticalPatientsArray.map(async (patient) => {
         const bed = await BedMySQL.findOne({
@@ -565,10 +617,21 @@ export async function getCriticalPatients(req, res) {
   }
 }
 
+/**
+ * Acknowledges a critical alert and logs the acknowledgment in audit trail
+ * @route POST /api/critical-factors/acknowledge-alert
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Alert acknowledgment data
+ * @param {string} req.body.alertId - ID of the alert being acknowledged
+ * @param {string} req.body.alertType - Type of alert (critical_patient, high_occupancy, etc.)
+ * @param {number} [req.body.patientId] - Optional patient ID if alert is patient-specific
+ * @param {string} [req.body.bedNumber] - Optional bed number if alert is bed-specific
+ * @param {Object} res - Express response object
+ */
 export async function acknowledgeAlert(req, res) {
   const t = await sequelize.transaction();
   try {
-    // Check if req.body exists
     if (!req.body) {
       await t.rollback();
       return res.status(400).json({
@@ -580,7 +643,6 @@ export async function acknowledgeAlert(req, res) {
     const { alertId, alertType, patientId, bedNumber, acknowledgedBy } = req.body;
     const userId = req.user.id;
 
-    // Validate required fields
     if (!alertId) {
       await t.rollback();
       return res.status(400).json({
@@ -597,7 +659,6 @@ export async function acknowledgeAlert(req, res) {
       });
     }
 
-    // Create audit message based on alert type
     let auditMessage = `Alert acknowledged: ${alertType}`;
     if (patientId && bedNumber) {
       auditMessage += ` for patient ${patientId} in bed ${bedNumber}`;
@@ -609,7 +670,6 @@ export async function acknowledgeAlert(req, res) {
       auditMessage += ` - System alert`;
     }
 
-    // Log the acknowledgment
     await logAudit(
       userId,
       "ACKNOWLEDGE",

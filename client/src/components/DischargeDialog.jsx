@@ -27,6 +27,15 @@ import { setLoading } from "../features/loaderSlice";
 import { showToast } from "../features/ui/uiSlice";
 import { setDialogOpen } from "../features/patients/patientSlice";
 
+/**
+ * Discharge Dialog component for discharging patients from beds
+ * Collects discharge information and creates discharge records
+ * @param {boolean} open - Controls dialog visibility
+ * @param {Function} onClose - Callback when dialog is closed
+ * @param {Function} onDischarge - Callback after successful discharge
+ * @param {Object} bed - Bed object being discharged
+ * @param {Object} patient - Patient object being discharged
+ */
 const DischargeDialog = ({ open, onClose, onDischarge, bed, patient }) => {
   const [dischargeData, setDischargeData] = useState({
     dischargeReason: "",
@@ -47,7 +56,6 @@ const DischargeDialog = ({ open, onClose, onDischarge, bed, patient }) => {
       [field]: value
     }));
     
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({
         ...prev,
@@ -85,7 +93,6 @@ const DischargeDialog = ({ open, onClose, onDischarge, bed, patient }) => {
     try {
       const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
       
-      // First, create discharge record
       const dischargeResponse = await fetch(`${BASE_URL}/patients/${patient.id}/discharge`, {
         method: "POST",
         headers: {
@@ -104,8 +111,6 @@ const DischargeDialog = ({ open, onClose, onDischarge, bed, patient }) => {
 
       const dischargeResult = await dischargeResponse.json();
       
-      // The discharge process already deassigns the bed, so no need for separate DELETE call
-
       dispatch(
         showToast({
           message: "Patient discharged successfully with complete medical record.",
@@ -113,10 +118,8 @@ const DischargeDialog = ({ open, onClose, onDischarge, bed, patient }) => {
         })
       );
       
-      // Close dialog and reset form
       handleCancel();
       
-      // Call the onDischarge callback to refresh parent component
       onDischarge();
       
     } catch (error) {

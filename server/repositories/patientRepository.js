@@ -125,13 +125,11 @@ class PatientRepository {
         consultantInCharge,
       } = patientData;
 
-      // Get existing patient
       const patient = await Patient.findByPk(patientId);
       if (!patient) {
         throw new Error("Patient not found");
       }
 
-      // Create or update emergency contact
       if (emergencyContactName && emergencyContactNumber) {
         const existingContact = await EmergencyContact.findOne({
           where: { patientId: patient.id, isPrimary: true }
@@ -157,7 +155,6 @@ class PatientRepository {
         }
       }
 
-      // Create or update medical record
       const existingMedicalRecord = await MedicalRecord.findOne({
         where: { patientId: patient.id }
       });
@@ -186,7 +183,6 @@ class PatientRepository {
         );
       }
 
-      // Create new admission
       const admission = await Admission.create(
         {
           patientId: patient.id,

@@ -12,7 +12,6 @@ import { authenticateJWT as protect, authorize } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Get all vital signs configurations (including inactive)
 router.get(
   "/all",
   protect,
@@ -20,7 +19,6 @@ router.get(
   getAllVitalSignsConfig
 );
 
-// Get active vital signs configurations only
 router.get(
   "/active",
   protect,
@@ -28,7 +26,6 @@ router.get(
   getActiveVitalSignsConfig
 );
 
-// Get a single vital signs configuration by ID
 router.get(
   "/:id",
   protect,
@@ -36,7 +33,6 @@ router.get(
   getVitalSignsConfigById
 );
 
-// Create a new vital signs configuration
 router.post(
   "/",
   protect,
@@ -44,7 +40,6 @@ router.post(
   createVitalSignsConfig
 );
 
-// Update a vital signs configuration
 router.put(
   "/:id",
   protect,
@@ -52,7 +47,6 @@ router.put(
   updateVitalSignsConfig
 );
 
-// Delete a vital signs configuration
 router.delete(
   "/:id",
   protect,
@@ -60,7 +54,6 @@ router.delete(
   deleteVitalSignsConfig
 );
 
-// Toggle active status
 router.patch(
   "/:id/toggle-status",
   protect,

@@ -59,6 +59,12 @@ const StyledCard = styled(Card)(({ theme, occupied }) => ({
   },
 }));
 
+/**
+ * Section wrapper component for patient detail sections
+ * @param {string} title - Section title
+ * @param {ReactNode} icon - Icon component
+ * @param {ReactNode} children - Section content
+ */
 const DetailSection = ({ title, icon, children }) => (
   <Box sx={{ mb: 3 }}>
     <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
@@ -71,6 +77,12 @@ const DetailSection = ({ title, icon, children }) => (
   </Box>
 );
 
+/**
+ * Individual detail item component
+ * @param {string} label - Field label
+ * @param {string|number} value - Field value
+ * @param {ReactNode} icon - Optional icon component
+ */
 const DetailItem = ({ label, value, icon }) => (
   <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
     {icon && <Box sx={{ mr: 1, color: "primary.main" }}>{icon}</Box>}
@@ -83,6 +95,13 @@ const DetailItem = ({ label, value, icon }) => (
   </Box>
 );
 
+/**
+ * Bed card component displaying bed status and patient information
+ * Supports viewing patient details, recording vitals, and discharging patients
+ * @param {Object} bed - Bed object with patient information
+ * @param {Function} [assignBed] - Callback to assign a patient to this bed
+ * @param {Function} [deassignBed] - Callback to discharge patient from this bed
+ */
 const BedCard = ({ bed, assignBed, deassignBed }) => {
   const [dischargeDialogOpen, setDischargeDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
@@ -103,7 +122,6 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
 
   const handleDischargeSuccess = () => {
     setDischargeDialogOpen(false);
-    // Call the parent's deassignBed function to refresh the bed data
     if (deassignBed) {
       deassignBed(bed);
     }
@@ -118,7 +136,6 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
   };
 
   const handleVitalsFormSave = () => {
-    // Refresh latest vitals after save
     if (patient?.id) {
       fetchLatestVitals();
     }

@@ -13,6 +13,28 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { MuiTelInput } from "mui-tel-input";
 
+/**
+ * Reusable form field component supporting multiple input types
+ * Handles text, number, date, select, file upload, and telephone inputs
+ * @param {string} name - Field name
+ * @param {string} label - Field label
+ * @param {string} [type='text'] - Input type
+ * @param {boolean} [multiline=false] - Whether field supports multiline
+ * @param {number} [rows] - Number of rows for multiline fields
+ * @param {boolean} [select=false] - Whether field is a select dropdown
+ * @param {Array} [options=[]] - Options for select fields
+ * @param {Object} touched - Formik touched object
+ * @param {Object} errors - Formik errors object
+ * @param {Function} handleChange - Formik change handler
+ * @param {Function} handleBlur - Formik blur handler
+ * @param {boolean} [required=false] - Whether field is required
+ * @param {string} [accept] - File types to accept for file inputs
+ * @param {boolean} [multiple] - Whether file input accepts multiple files
+ * @param {Function} setFieldValue - Formik setFieldValue function
+ * @param {Object} values - Formik values object
+ * @param {string} [helperText] - Helper text to display
+ * @param {boolean} [disabled=false] - Whether field is disabled
+ */
 const FormField = ({
   name,
   label,
@@ -92,11 +114,9 @@ const FormField = ({
       const selectedFiles = event.currentTarget.files;
       
       if (multiple) {
-        // For multiple files, always store as array
         const filesArray = Array.from(selectedFiles);
         setFieldValue(name, filesArray.length > 0 ? filesArray : null);
       } else {
-        // For single file, store as single file object
         setFieldValue(name, selectedFiles.length > 0 ? selectedFiles[0] : null);
       }
     };

@@ -4,7 +4,10 @@ import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { PatientDocument, sequelize } from "../config/mysqlDB.js";
 
-// Create uploads directory if it doesn't exist
+/**
+ * Creates upload directories for patient documents if they don't exist
+ * Creates base directory and subdirectories for different document types
+ */
 const createUploadDirectories = () => {
   const baseDir = path.join(process.cwd(), "uploads", "patient-documents");
   const subDirs = ["medical-reports", "id-proof", "consent-forms", "other"];
@@ -21,10 +24,12 @@ const createUploadDirectories = () => {
   });
 };
 
-// Initialize upload directories
 createUploadDirectories();
 
-// Configure multer for local file storage
+/**
+ * Multer storage configuration for patient document uploads
+ * Routes files to appropriate subdirectories based on document type
+ */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const { fieldName } = file;
@@ -48,7 +53,6 @@ const storage = multer.diskStorage({
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    // Generate unique filename with timestamp and UUID
     const uniqueSuffix = `${Date.now()}-${uuidv4()}`;
     const extension = path.extname(file.originalname);
     const baseName = path.basename(file.originalname, extension);
@@ -58,7 +62,6 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = [
-    // Images
     "image/jpeg",
     "image/jpg", 
     "image/png",
@@ -66,8 +69,6 @@ const fileFilter = (req, file, cb) => {
     "image/webp",
     "image/bmp",
     "image/tiff",
-    
-    // Documents
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -77,16 +78,12 @@ const fileFilter = (req, file, cb) => {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "text/plain",
     "text/csv",
-    
-    // Audio
     "audio/mpeg",
     "audio/mp3",
     "audio/wav",
     "audio/ogg",
     "audio/aac",
     "audio/m4a",
-    
-    // Video
     "video/mp4",
     "video/mpeg",
     "video/quicktime",
@@ -111,11 +108,22 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: { 
-    fileSize: 100 * 1024 * 1024, // 100MB limit for videos and large documents
-    files: 10 // Maximum 10 files per upload
+    fileSize: 100 * 1024 * 1024,
+    files: 10
   },
 });
 
+/**
+ * Uploads patient documents to the server
+ * Supports multiple document types and validates patient existence
+ * @route POST /api/documents/:patientId/upload
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.patientId - ID of the patient
+ * @param {Object} req.files - Uploaded files from multer
+ * @param {Object} res - Express response object
+ */
 export const uploadPatientDocuments = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -126,7 +134,6 @@ export const uploadPatientDocuments = async (req, res) => {
         .json({ success: false, message: "No files uploaded" });
     }
 
-    // Check if patient exists
     const patientExists = await sequelize.query(
       "SELECT id FROM patients WHERE id = ?",
       {
@@ -158,7 +165,6 @@ export const uploadPatientDocuments = async (req, res) => {
 
       for (const file of fileList) {
         try {
-          // Generate the file URL for local access
           const relativePath = path.relative(
             path.join(process.cwd()),
             file.path
@@ -189,7 +195,6 @@ export const uploadPatientDocuments = async (req, res) => {
             `Error saving file ${file.originalname} to database: ${error.message}`
           );
           
-          // Clean up the uploaded file if database save fails
           if (fs.existsSync(file.path)) {
             fs.unlinkSync(file.path);
           }
@@ -225,6 +230,15 @@ export const uploadPatientDocuments = async (req, res) => {
   }
 };
 
+/**
+ * Retrieves all documents for a specific patient
+ * @route GET /api/documents/:patientId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.patientId - ID of the patient
+ * @param {Object} res - Express response object
+ */
 export const getPatientDocuments = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -241,7 +255,6 @@ export const getPatientDocuments = async (req, res) => {
       });
     }
 
-    // Format documents with additional metadata
     const formattedDocuments = documents.map(doc => ({
       id: doc.id,
       patientId: doc.patientId,
@@ -274,7 +287,15 @@ export const getPatientDocuments = async (req, res) => {
   }
 };
 
-// New endpoint to download/serve files
+/**
+ * Downloads/serves a patient document file
+ * @route GET /api/documents/:documentId/download
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.documentId - ID of the document
+ * @param {Object} res - Express response object
+ */
 export const downloadPatientDocument = async (req, res) => {
   try {
     const { documentId } = req.params;
@@ -288,11 +309,8 @@ export const downloadPatientDocument = async (req, res) => {
       });
     }
     
-    // Convert URL back to file path
-    // Handle both old format (/uploads/uploads/...) and new format (/uploads/...)
     let cleanPath = document.fileUrl;
     if (cleanPath.startsWith('/uploads/uploads/')) {
-      // Fix double uploads path from old format
       cleanPath = cleanPath.replace('/uploads/uploads/', '/uploads/');
     }
     if (cleanPath.startsWith('/uploads/')) {
@@ -307,11 +325,9 @@ export const downloadPatientDocument = async (req, res) => {
       });
     }
     
-    // Set appropriate headers
     res.setHeader('Content-Disposition', `attachment; filename="${document.fileName}"`);
     res.setHeader('Content-Type', document.fileType);
     
-    // Stream the file
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
     
@@ -325,7 +341,15 @@ export const downloadPatientDocument = async (req, res) => {
   }
 };
 
-// New endpoint to delete documents
+/**
+ * Deletes a patient document from both database and file system
+ * @route DELETE /api/documents/:documentId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.documentId - ID of the document to delete
+ * @param {Object} res - Express response object
+ */
 export const deletePatientDocument = async (req, res) => {
   try {
     const { documentId } = req.params;
@@ -339,13 +363,11 @@ export const deletePatientDocument = async (req, res) => {
       });
     }
     
-    // Delete the physical file
     const filePath = path.join(process.cwd(), document.fileUrl.replace('/uploads/', 'uploads/'));
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
     
-    // Delete the database record
     await document.destroy();
     
     res.status(200).json({

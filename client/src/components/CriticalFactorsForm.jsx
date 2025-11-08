@@ -27,7 +27,10 @@ import { useSelector } from "react-redux";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 
-// Default fallback fields (for backward compatibility)
+/**
+ * Default vital signs configuration used as fallback when backend config is unavailable
+ * Ensures form always has fields to display even if API fails
+ */
 const defaultFields = [
   { name: "heartRate", label: "Heart Rate (HR)", unit: "bpm", normalRange: "60–100", dataType: "integer", normalRangeMin: 60, normalRangeMax: 100 },
   { name: "respiratoryRate", label: "Respiratory Rate (RR)", unit: "breaths/min", normalRange: "12–20", dataType: "integer", normalRangeMin: 12, normalRangeMax: 20 },
@@ -41,12 +44,22 @@ const defaultFields = [
   { name: "urineOutput", label: "Urine Output", unit: "mL/kg/hr", normalRange: "≥0.5", dataType: "decimal", normalRangeMin: 0.5, normalRangeMax: null },
 ];
 
+/**
+ * Form component for recording and updating patient vital signs
+ * Dynamically generates form fields based on backend vital signs configuration
+ * Supports both create (new record) and update (amend existing) modes
+ * 
+ * @param {boolean} open - Controls dialog visibility
+ * @param {Function} onClose - Callback when dialog is closed
+ * @param {number} patientId - ID of the patient whose vitals are being recorded
+ * @param {string} bedNumber - Bed number for display purposes
+ * @param {Function} onSave - Callback after successful save to refresh parent data
+ */
 const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) => {
   const currentUser = useSelector((state) => state.auth.user);
   const [vitalSignsConfig, setVitalSignsConfig] = useState([]);
   const [loadingConfig, setLoadingConfig] = useState(false);
   
-  // Generate initial form state dynamically from vital signs config, with fallback
   const initialFormState = useMemo(() => {
     const state = {};
     if (vitalSignsConfig.length > 0) {
@@ -54,7 +67,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
         state[config.name] = "";
       });
     } else {
-      // Fallback to default fields
       defaultFields.forEach((field) => {
         state[field.name] = "";
       });
@@ -71,18 +83,15 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [amendmentReason, setAmendmentReason] = useState("");
 
-  // Fetch active vital signs configuration
   useEffect(() => {
     const fetchVitalSignsConfig = async () => {
       setLoadingConfig(true);
       try {
         const configs = await getActiveVitalSignsConfig();
-        // Sort by displayOrder
         const sortedConfigs = configs.sort((a, b) => a.displayOrder - b.displayOrder);
         setVitalSignsConfig(sortedConfigs);
       } catch (error) {
         console.error("Error fetching vital signs config:", error);
-        // Fallback to default configs if API fails
         setVitalSignsConfig([]);
       } finally {
         setLoadingConfig(false);
@@ -94,7 +103,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     }
   }, [open]);
 
-  // Generate validation schema dynamically from vital signs config, with fallback
   const validationSchema = useMemo(() => {
     const schema = {};
     const configsToUse = vitalSignsConfig.length > 0 ? vitalSignsConfig : defaultFields;
@@ -105,7 +113,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
           .nullable()
           .transform((value) => (isNaN(value) ? null : value));
         
-        // Add min/max validation if normal ranges are defined
         if (config.normalRangeMin !== null) {
           schema[config.name] = schema[config.name].min(
             config.normalRangeMin,
@@ -125,11 +132,10 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     return Yup.object(schema);
   }, [vitalSignsConfig]);
 
-  // Formik setup
   const formik = useFormik({
     initialValues: initialFormState,
     validationSchema,
-    enableReinitialize: true, // Reinitialize when initialFormState or validationSchema changes
+    enableReinitialize: true,
     validateOnBlur: true,
     validateOnChange: true,
     onSubmit: async (values) => {
@@ -137,12 +143,9 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
       setError(null);
       setSuccessMessage(null);
 
-      // When creating a new record (not updating), only include fields that were actually changed/entered
-      // Compare with the latest record to determine which fields were updated
       let payload = {};
       
       if (isUpdateMode && latestRecord?.id) {
-        // Update mode: send all values (as before)
         payload = {
           ...values,
           patientId: patientId,
@@ -150,8 +153,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
           recordedAt: new Date().toISOString(),
         };
       } else {
-        // Create mode: only include fields that were actually entered/changed
-        // Compare with latest record to find changed fields
         const changedFields = {};
         
         for (const key in values) {
@@ -160,11 +161,7 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
             ? null 
             : latestRecord[key];
           
-          // Include field if:
-          // 1. It has a value (not empty/null)
-          // 2. It's different from the previous record (or there's no previous record)
           if (currentValue !== null && currentValue !== undefined && currentValue !== "") {
-            // Convert to appropriate type for comparison
             const currentValueNum = typeof currentValue === 'string' && !isNaN(currentValue) 
               ? parseFloat(currentValue) 
               : currentValue;
@@ -172,7 +169,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
               ? parseFloat(previousValue) 
               : previousValue;
             
-            // Include if value changed or if there's no previous record
             if (!latestRecord || currentValueNum !== previousValueNum) {
               changedFields[key] = currentValue;
             }
@@ -187,7 +183,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
         };
       }
 
-      // Convert empty strings to null for the backend
       for (const key in payload) {
         if (payload[key] === "") {
           payload[key] = null;
@@ -195,7 +190,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
       }
 
       try {
-        // If in update mode, update the existing record, otherwise create a new one
         if (isUpdateMode && latestRecord?.id) {
           if (!amendmentReason.trim()) {
             setError("Amendment reason is required for updates.");
@@ -213,7 +207,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
         }
 
         setIsLoading(false);
-        // Call onSave callback to refresh parent data
         if (onSave) {
           onSave();
         }
@@ -231,7 +224,11 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     },
   });
 
-  // Fetch latest vitals for the patient
+  /**
+   * Fetches and merges all historical vital sign records for the patient
+   * Merges records chronologically to display the most recent value for each field
+   * This ensures all previously entered data is visible, not just the latest record
+   */
   const fetchLatestVitals = async () => {
     if (!patientId) return;
 
@@ -241,25 +238,17 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     try {
       const data = await fetchLatestVitalSigns(patientId);
       if (data && data.length > 0) {
-        // Get the most recent record (for update mode)
         const latest = data[0];
         setLatestRecord(latest);
 
-        // Merge ALL records to get the most recent value for each field
-        // This ensures we show all previously entered values, not just from the latest record
         const mergedValues = {};
         
-        // Process all records in chronological order (oldest first)
-        // This way, newer values will overwrite older ones
         const sortedData = [...data].sort((a, b) => 
           new Date(a.recordedAt) - new Date(b.recordedAt)
         );
         
-        // Merge all records - each record adds/updates its fields
         sortedData.forEach(record => {
-          // Process all fields in the record
           for (const key in record) {
-            // Skip metadata fields
             const excludedFields = ['id', 'recordedAt', 'recordedBy', 'isAmended', 
               'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 
               'patientId', 'createdAt', 'updatedAt', 'recorder'];
@@ -269,16 +258,13 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
                 record[key] !== undefined && 
                 record[key] !== '' &&
                 typeof record[key] !== 'object') {
-              // Use the most recent value (later records overwrite earlier ones)
               mergedValues[key] = record[key];
             }
           }
         });
 
-        // Populate form with merged values from all records
         const formValues = { ...initialFormState };
         
-        // Map merged values to form fields
         for (const key in formValues) {
           if (mergedValues[key] !== null && mergedValues[key] !== undefined && mergedValues[key] !== '') {
             formValues[key] = mergedValues[key].toString();
@@ -287,7 +273,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
         
         formik.setValues(formValues);
       } else {
-        // If no records found, reset to initial state
         formik.resetForm({ values: initialFormState });
         setLatestRecord(null);
       }
@@ -299,10 +284,8 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     }
   };
 
-  // Fetch the latest vital signs when the form opens and config is loaded
   useEffect(() => {
     if (open && patientId && vitalSignsConfig.length > 0 && !loadingConfig) {
-      // Wait a bit for formik to reinitialize with new config
       setTimeout(() => {
         fetchLatestVitals();
       }, 100);
@@ -310,14 +293,12 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, patientId, vitalSignsConfig.length, loadingConfig]);
 
-  // Reset form when dialog opens (but don't reset when config changes if form is already open)
   useEffect(() => {
     if (open) {
       setError(null);
       setSuccessMessage(null);
       setIsUpdateMode(false);
       setAmendmentReason("");
-      // Only reset if we don't have a latest record yet
       if (!latestRecord) {
         formik.resetForm({ values: initialFormState });
       }
@@ -326,13 +307,11 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
       setLatestRecord(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]); // Only reset when dialog opens/closes, not when config changes
+  }, [open]);
 
-  // Handle toggle between create and update modes
   const handleModeToggle = (event) => {
     setIsUpdateMode(event.target.checked);
     if (event.target.checked && latestRecord) {
-      // Populate form with latest values for update
       const formValues = { ...initialFormState };
       for (const key in formValues) {
         if (latestRecord[key] !== null && latestRecord[key] !== undefined) {
@@ -341,11 +320,10 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
       }
       formik.setValues(formValues);
     } else {
-      // Reset form for new entry
       formik.resetForm();
     }
   };
-  // Check if any values are outside normal range
+
   const hasAbnormalValues = () => {
     for (const field of fields) {
       if (isOutsideNormalRange(field.name, formik.values[field.name])) {
@@ -355,37 +333,28 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     return false;
   };
 
-  // Handle form submission
   const handleSubmit = (event) => {
     event.preventDefault();
-    // If there are abnormal values, show confirmation dialog first
     if (hasAbnormalValues()) {
       setConfirmDialogOpen(true);
     } else {
-      // Otherwise, submit directly
       formik.handleSubmit();
     }
   };
 
-  // Confirm and proceed with submission
   const handleConfirmSubmit = async () => {
     setConfirmDialogOpen(false);
-    
-    // When user confirms abnormal values, we bypass validation and submit directly
     await handleDirectSubmit(formik.values);
   };
 
-  // Direct submit function that bypasses Formik validation
   const handleDirectSubmit = async (values) => {
     setIsLoading(true);
     setError(null);
     setSuccessMessage(null);
 
-    // When creating a new record (not updating), only include fields that were actually changed/entered
     let payload = {};
     
     if (isUpdateMode && latestRecord?.id) {
-      // Update mode: send all values (as before)
       payload = {
         ...values,
         patientId: patientId,
@@ -393,8 +362,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
         recordedAt: new Date().toISOString(),
       };
     } else {
-      // Create mode: only include fields that were actually entered/changed
-      // Compare with latest record to find changed fields
       const changedFields = {};
       
       for (const key in values) {
@@ -403,11 +370,7 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
           ? null 
           : latestRecord[key];
         
-        // Include field if:
-        // 1. It has a value (not empty/null)
-        // 2. It's different from the previous record (or there's no previous record)
         if (currentValue !== null && currentValue !== undefined && currentValue !== "") {
-          // Convert to appropriate type for comparison
           const currentValueNum = typeof currentValue === 'string' && !isNaN(currentValue) 
             ? parseFloat(currentValue) 
             : currentValue;
@@ -415,7 +378,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
             ? parseFloat(previousValue) 
             : previousValue;
           
-          // Include if value changed or if there's no previous record
           if (!latestRecord || currentValueNum !== previousValueNum) {
             changedFields[key] = currentValue;
           }
@@ -430,7 +392,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
       };
     }
 
-    // Convert empty strings to null for the backend
     for (const key in payload) {
       if (payload[key] === "") {
         payload[key] = null;
@@ -438,7 +399,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     }
     
     try {
-      // If in update mode, update the existing record, otherwise create a new one
       if (isUpdateMode && latestRecord?.id) {
         if (!amendmentReason.trim()) {
           setError("Amendment reason is required for updates.");
@@ -454,7 +414,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
       }
 
       setIsLoading(false);
-      // Call onSave callback to refresh parent data
       if (onSave) {
         onSave();
       }
@@ -471,12 +430,10 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     }
   };
 
-  // Cancel confirmation dialog
   const handleCancelConfirm = () => {
     setConfirmDialogOpen(false);
   };
 
-  // Generate fields array dynamically from vital signs config, with fallback to defaults
   const fields = useMemo(() => {
     if (vitalSignsConfig.length > 0) {
       return vitalSignsConfig.map((config) => ({
@@ -496,11 +453,9 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
         normalRangeMax: config.normalRangeMax,
       }));
     }
-    // Fallback to default fields if config is empty
     return defaultFields;
   }, [vitalSignsConfig]);
 
-  // Function to check if a value is outside the normal range (dynamic with fallback)
   const isOutsideNormalRange = (fieldName, value) => {
     if (!value || value === "") return false;
 
@@ -520,7 +475,6 @@ const CriticalFactorsForm = ({ open, onClose, patientId, bedNumber, onSave }) =>
     return false;
   };
 
-  // Reset amendment reason when switching modes or closing
   useEffect(() => {
     if (!isUpdateMode || !open) {
       setAmendmentReason("");

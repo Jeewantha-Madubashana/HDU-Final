@@ -34,10 +34,15 @@ import axios from "axios";
 import { acknowledgeAlert } from "../api/vitalSignsApi";
 import { getActiveVitalSignsConfig } from "../api/vitalSignsConfigApi";
 
+/**
+ * Critical Alerts System component
+ * Displays real-time critical patient alerts and system alerts
+ * Supports alert acknowledgment and persistence in localStorage
+ * @returns {JSX.Element} Alert system with expandable alert list
+ */
 const CriticalAlertsSystem = () => {
   const [alerts, setAlerts] = useState([]);
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState(() => {
-    // Load acknowledged alerts from localStorage on component mount
     const saved = localStorage.getItem('acknowledgedAlerts');
     try {
       return saved ? new Set(JSON.parse(saved)) : new Set();
@@ -54,13 +59,15 @@ const CriticalAlertsSystem = () => {
   const dispatch = useDispatch();
   const token = useSelector((state) => state.auth.token);
 
-  // Persist acknowledged alerts to localStorage whenever they change
+  /**
+   * Updates acknowledged alerts and persists to localStorage
+   * @param {Set<string>} newAcknowledgedAlerts - Set of acknowledged alert IDs
+   */
   const updateAcknowledgedAlerts = (newAcknowledgedAlerts) => {
     setAcknowledgedAlerts(newAcknowledgedAlerts);
     localStorage.setItem('acknowledgedAlerts', JSON.stringify([...newAcknowledgedAlerts]));
   };
 
-  // Fetch vital signs configuration
   useEffect(() => {
     const fetchVitalSignsConfig = async () => {
       try {
@@ -75,10 +82,8 @@ const CriticalAlertsSystem = () => {
 
   useEffect(() => {
     fetchCriticalAlerts();
-    // Set up interval to refresh alerts every 30 seconds
     const interval = setInterval(fetchCriticalAlerts, 30000);
     
-    // Clean up old acknowledged alerts from localStorage on mount
     const cleanupOldAlerts = () => {
       const oneHourAgo = Date.now() - (60 * 60 * 1000);
       const currentIntervalId = Math.floor(Date.now() / (15 * 60 * 1000));
@@ -117,20 +122,16 @@ const CriticalAlertsSystem = () => {
     try {
       const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
       
-      // Fetch critical patients
       const criticalResponse = await axios.get(`${BASE_URL}/critical-factors/critical-patients`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Fetch bed data
       const bedsResponse = await axios.get(`${BASE_URL}/beds`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Generate alerts based on data
       const generatedAlerts = generateAlerts(criticalResponse.data || [], bedsResponse.data || []);
       
-      // Clean up old acknowledged alerts
       const oneHourAgo = Date.now() - (60 * 60 * 1000);
       const fifteenMinutesAgo = Date.now() - (15 * 60 * 1000);
       const currentIntervalId = Math.floor(Date.now() / (15 * 60 * 1000));
@@ -138,7 +139,6 @@ const CriticalAlertsSystem = () => {
       
       acknowledgedAlerts.forEach(alertId => {
         if (alertId.startsWith('critical-')) {
-          // Patient critical alerts - keep for 1 hour
           const parts = alertId.split('-');
           if (parts.length >= 3) {
             const timestamp = parseInt(parts[parts.length - 1]);
@@ -147,21 +147,18 @@ const CriticalAlertsSystem = () => {
             }
           }
         } else if (alertId.startsWith('high-occupancy-') || alertId.startsWith('low-availability-')) {
-          // System alerts - keep only current and previous interval (30 minutes max)
           const parts = alertId.split('-');
           const intervalId = parseInt(parts[parts.length - 1]);
-          if (intervalId >= currentIntervalId - 1) { // Current or previous interval
+          if (intervalId >= currentIntervalId - 1) {
             cleanedAcknowledgedAlerts.add(alertId);
           }
         } else {
-          // Legacy or unknown alerts - keep for 30 minutes
           cleanedAcknowledgedAlerts.add(alertId);
         }
       });
       
       updateAcknowledgedAlerts(cleanedAcknowledgedAlerts);
       
-      // Filter out already acknowledged alerts
       const filteredAlerts = generatedAlerts.filter(alert => !cleanedAcknowledgedAlerts.has(alert.id));
       setAlerts(filteredAlerts);
 
@@ -172,15 +169,17 @@ const CriticalAlertsSystem = () => {
     }
   };
 
+  /**
+   * Generates alert objects from critical patients and bed data
+   * Creates unique alert IDs based on patient conditions and timestamps
+   * @param {Array} criticalPatients - Array of patients with critical vital signs
+   * @param {Array} beds - Array of bed data for occupancy calculations
+   * @returns {Array} Array of alert objects
+   */
   const generateAlerts = (criticalPatients, beds) => {
     const alerts = [];
 
-    // Critical patient alerts
-    // Each alert ID includes the timestamp of the latest critical factors
-    // This ensures new alerts appear when patient conditions change or worsen
     criticalPatients.forEach(patient => {
-      // Create a unique alert ID based on patient and their latest critical factors
-      // This ensures new alerts are generated when conditions change
       const latestFactors = patient.criticalFactors?.[0];
       const factorTimestamp = latestFactors?.recordedAt || new Date().toISOString();
       const alertId = `critical-${patient.patientId}-${new Date(factorTimestamp).getTime()}`;
@@ -200,14 +199,12 @@ const CriticalAlertsSystem = () => {
       });
     });
 
-    // High occupancy alert
     const occupiedBeds = beds.filter(bed => bed.patientId !== null).length;
     const occupancyRate = (occupiedBeds / beds.length) * 100;
     
     if (occupancyRate > 80) {
-      // Create alert ID that changes every 15 minutes to allow re-alerting
       const currentTime = Date.now();
-      const intervalId = Math.floor(currentTime / (15 * 60 * 1000)); // 15-minute intervals
+      const intervalId = Math.floor(currentTime / (15 * 60 * 1000));
       
       alerts.push({
         id: `high-occupancy-${intervalId}`,
@@ -220,12 +217,10 @@ const CriticalAlertsSystem = () => {
       });
     }
 
-    // Low bed availability alert
     const availableBeds = beds.filter(bed => bed.patientId === null).length;
     if (availableBeds <= 2) {
-      // Create alert ID that changes every 15 minutes to allow re-alerting
       const currentTime = Date.now();
-      const intervalId = Math.floor(currentTime / (15 * 60 * 1000)); // 15-minute intervals
+      const intervalId = Math.floor(currentTime / (15 * 60 * 1000));
       
       alerts.push({
         id: `low-availability-${availableBeds}-${intervalId}`,
@@ -252,14 +247,12 @@ const CriticalAlertsSystem = () => {
 
   const handleAcknowledgeAlert = async (alert) => {
     try {
-      // Prepare alert data based on alert type
       const alertData = {
         alertId: alert.id,
         alertType: alert.type,
         acknowledgedBy: alert.patientName || "System User",
       };
 
-      // Add patient-specific data only if it exists
       if (alert.patientId) {
         alertData.patientId = alert.patientId;
       }
@@ -267,14 +260,11 @@ const CriticalAlertsSystem = () => {
         alertData.bedNumber = alert.bedNumber;
       }
 
-      // Call the API to acknowledge the alert
       await acknowledgeAlert(alertData);
 
-      // Add to acknowledged alerts set to prevent reappearing
       const newAcknowledgedAlerts = new Set([...acknowledgedAlerts, alert.id]);
       updateAcknowledgedAlerts(newAcknowledgedAlerts);
       
-      // Remove from current alerts
       setAlerts(prevAlerts => prevAlerts.filter(a => a.id !== alert.id));
       
       dispatch(
@@ -520,14 +510,9 @@ const CriticalAlertsSystem = () => {
                   </Typography>
                   <List dense>
                     {selectedAlert.details.map((factor, index) => {
-                      // Get all vital signs from the factor dynamically using vitalSignsConfig
                       const vitalSigns = [];
                       
-                      // Fields to exclude (metadata, not vital signs)
                       const excludedFields = ['id', 'recordedAt', 'recordedBy', 'isAmended', 'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'patientId', 'createdAt', 'updatedAt', 'recorder'];
-                      
-                      // Get all fields from the factor that have values
-                      // Only include primitive values (strings, numbers), exclude objects
                       const factorFields = Object.keys(factor).filter(key => 
                         !excludedFields.includes(key) &&
                         factor[key] !== null && 
@@ -536,7 +521,6 @@ const CriticalAlertsSystem = () => {
                         typeof factor[key] !== 'object' // Exclude objects (like recorder)
                       );
                       
-                      // Sort fields by displayOrder from config
                       const sortedFields = factorFields.map(fieldName => {
                         const config = vitalSignsConfig.find(c => c.name === fieldName);
                         return {
@@ -548,7 +532,6 @@ const CriticalAlertsSystem = () => {
                         };
                       }).sort((a, b) => a.displayOrder - b.displayOrder);
                       
-                      // Display all fields dynamically based on config (no hardcoded special cases)
                       sortedFields.forEach(field => {
                         vitalSigns.push({
                           label: field.label,

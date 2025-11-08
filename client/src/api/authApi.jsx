@@ -22,7 +22,6 @@ export const getConsultants = async () => {
   return response.data;
 };
 
-// Super Admin endpoints
 export const getPendingUsers = async () => {
   const response = await apiClient.get("/auth/pending-users");
   return response.data;

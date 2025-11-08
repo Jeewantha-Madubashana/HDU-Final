@@ -1,12 +1,17 @@
 import { Patient, BedMySQL, CriticalFactor, Admission, VitalSignsConfig } from "../config/mysqlDB.js";
 import { Op } from "sequelize";
 
+/**
+ * Retrieves comprehensive patient analytics including demographics and vital signs trends
+ * @route GET /api/patients/analytics
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getPatientAnalytics(req, res) {
   try {
-    // Get total patients
     const totalPatients = await Patient.count();
     
-    // Get gender distribution
     const genderDistributionRaw = await Patient.findAll({
       attributes: [
         'gender',
@@ -15,14 +20,12 @@ export async function getPatientAnalytics(req, res) {
       group: ['gender']
     });
     
-    // Format gender distribution
     const genderDistribution = genderDistributionRaw.map(item => ({
       label: item.gender || 'Unknown',
       value: parseInt(item.dataValues.count),
       color: item.gender === 'Male' ? '#2196F3' : item.gender === 'Female' ? '#E91E63' : '#9E9E9E'
     }));
     
-    // Get age groups distribution
     const patientsWithAge = await Patient.findAll({
       attributes: ['id', 'dateOfBirth', 'age'],
       where: {
@@ -33,7 +36,6 @@ export async function getPatientAnalytics(req, res) {
       }
     });
     
-    // Calculate age groups
     const ageGroups = {
       '0-30': 0,
       '30-40': 0,
@@ -55,7 +57,6 @@ export async function getPatientAnalytics(req, res) {
       }
     });
     
-    // Format age groups
     const ageGroupsFormatted = [
       { label: '0-30', value: ageGroups['0-30'], color: '#2196F3' },
       { label: '30-40', value: ageGroups['30-40'], color: '#4CAF50' },
@@ -64,7 +65,6 @@ export async function getPatientAnalytics(req, res) {
       { label: '60+', value: ageGroups['60+'], color: '#9C27B0' }
     ].filter(item => item.value > 0);
     
-    // Get vital signs trends (last 12 records for each vital sign)
     const vitalSignsTrends = {
       heartRate: [],
       bloodPressure: [],
@@ -72,19 +72,17 @@ export async function getPatientAnalytics(req, res) {
       spO2: []
     };
     
-    // Get last 12 critical factors records
     const recentFactors = await CriticalFactor.findAll({
       attributes: ['heartRate', 'bloodPressureSystolic', 'bloodPressureDiastolic', 'temperature', 'spO2', 'recordedAt'],
       where: {
         recordedAt: {
-          [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+          [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
         }
       },
       order: [['recordedAt', 'DESC']],
       limit: 12
     });
     
-    // Process vital signs data
     recentFactors.forEach(factor => {
       if (factor.heartRate) vitalSignsTrends.heartRate.push(factor.heartRate);
       if (factor.bloodPressureSystolic) vitalSignsTrends.bloodPressure.push(factor.bloodPressureSystolic);
@@ -92,21 +90,16 @@ export async function getPatientAnalytics(req, res) {
       if (factor.spO2) vitalSignsTrends.spO2.push(factor.spO2);
     });
     
-    // Reverse to show chronological order
     vitalSignsTrends.heartRate = vitalSignsTrends.heartRate.reverse();
     vitalSignsTrends.bloodPressure = vitalSignsTrends.bloodPressure.reverse();
     vitalSignsTrends.temperature = vitalSignsTrends.temperature.reverse();
     vitalSignsTrends.spO2 = vitalSignsTrends.spO2.reverse();
     
-    // Get critical patients using dynamic vital signs configuration
-    // Fetch active vital signs configuration to get dynamic normal ranges
     const vitalSignsConfigs = await VitalSignsConfig.findAll({
       where: { isActive: true },
       order: [["displayOrder", "ASC"]],
     });
 
-    // Get valid database column fields dynamically from the CriticalFactor model
-    // These are fields that can be queried directly (not stored in JSON)
     const metadataFields = ['id', 'patientId', 'recordedAt', 'recordedBy', 'isAmended', 
       'amendedBy', 'amendedAt', 'amendmentReason', 'dynamicVitals', 'createdAt', 'updatedAt'];
     const modelAttributes = Object.keys(CriticalFactor.rawAttributes || {});
@@ -117,8 +110,6 @@ export async function getPatientAnalytics(req, res) {
     for (const config of vitalSignsConfigs) {
       const fieldName = config.name;
       
-      // Only process fields that exist as database columns (can be queried directly)
-      // Dynamic fields (stored in JSON) are handled separately in getCriticalPatients
       if (validCriticalFactorFields.includes(fieldName)) {
         if (config.normalRangeMin !== null || config.normalRangeMax !== null) {
           if (config.normalRangeMax !== null) {
@@ -135,7 +126,6 @@ export async function getPatientAnalytics(req, res) {
       }
     }
     
-    // Get critical patients (only if we have conditions from dynamic config)
     let criticalPatients = [];
     if (criticalConditions.length > 0) {
       criticalPatients = await CriticalFactor.findAll({
@@ -150,7 +140,6 @@ export async function getPatientAnalytics(req, res) {
       });
     }
     
-    // Get bed occupancy
     const occupiedBeds = await BedMySQL.count({
       where: {
         patientId: { [Op.ne]: null }
@@ -178,6 +167,15 @@ export async function getPatientAnalytics(req, res) {
   }
 }
 
+/**
+ * Retrieves a specific patient by ID with related bed and critical factors
+ * @route GET /api/patients/:patientId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.patientId - ID of the patient
+ * @param {Object} res - Express response object
+ */
 export async function getPatientById(req, res) {
   try {
     const { patientId } = req.params;
@@ -213,6 +211,13 @@ export async function getPatientById(req, res) {
   }
 }
 
+/**
+ * Retrieves all patients in the system
+ * @route GET /api/patients
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getAllPatients(req, res) {
   try {
     const patients = await Patient.findAll({
@@ -243,9 +248,16 @@ export async function getAllPatients(req, res) {
   }
 }
 
+/**
+ * Calculates average length of stay statistics for patients
+ * Includes current patients, discharged patients, and stay duration metrics
+ * @route GET /api/patients/analytics/alos
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getAverageLengthOfStay(req, res) {
   try {
-    // Calculate ALOS for discharged patients
     const alosQuery = `
       SELECT 
         AVG(DATEDIFF(dischargeDateTime, admissionDateTime)) as avgLengthOfStay,
@@ -260,7 +272,6 @@ export async function getAverageLengthOfStay(req, res) {
         AND dischargeDateTime > admissionDateTime
     `;
 
-    // Calculate ALOS for currently admitted patients
     const currentPatientsQuery = `
       SELECT 
         COUNT(*) as currentPatients,
@@ -273,7 +284,6 @@ export async function getAverageLengthOfStay(req, res) {
     const [alosResult] = await Patient.sequelize.query(alosQuery);
     const [currentPatientsResult] = await Patient.sequelize.query(currentPatientsQuery);
 
-    // Get ALOS by department
     const alosByDepartmentQuery = `
       SELECT 
         department,
@@ -307,6 +317,17 @@ export async function getAverageLengthOfStay(req, res) {
   }
 }
 
+/**
+ * Discharges a patient and deassigns them from their bed
+ * Closes active admissions and creates discharge record
+ * @route POST /api/patients/:patientId/discharge
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.patientId - ID of the patient to discharge
+ * @param {Object} req.body - Discharge information
+ * @param {Object} res - Express response object
+ */
 export async function dischargePatient(req, res) {
   try {
     const { patientId } = req.params;
@@ -330,7 +351,6 @@ export async function dischargePatient(req, res) {
       });
     }
 
-    // Find the patient
     const patient = await Patient.findOne({
       where: { id: patientId },
       include: [
@@ -347,7 +367,6 @@ export async function dischargePatient(req, res) {
       return res.status(404).json({ msg: "Patient not found" });
     }
 
-    // Create discharge record
     const dischargeRecord = {
       patientId: patientId,
       bedId: bedId,
@@ -362,7 +381,6 @@ export async function dischargePatient(req, res) {
       status: 'Discharged'
     };
 
-    // Update admission status to discharged
     if (patient.admissions && patient.admissions.length > 0) {
       const currentAdmission = patient.admissions[0];
       await currentAdmission.update({
@@ -372,7 +390,6 @@ export async function dischargePatient(req, res) {
       });
     }
 
-    // Deassign the bed
     if (bedId) {
       try {
         const bed = await BedMySQL.findOne({ where: { id: bedId } });
@@ -383,8 +400,6 @@ export async function dischargePatient(req, res) {
         console.warn("Could not deassign bed:", error.message);
       }
     }
-
-    // Create discharge record in database (you might need to create a Discharge model)
 
     res.json({
       msg: "Patient discharged successfully",

@@ -53,7 +53,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     if (onClose) onClose();
   };
 
-  // Generate unique patient ID when component mounts
   useEffect(() => {
     const fetchPatientId = async () => {
       try {
@@ -71,7 +70,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     fetchPatientId();
   }, []);
 
-  // Load consultants when component mounts
   useEffect(() => {
     const fetchConsultants = async () => {
       try {
@@ -89,7 +87,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     fetchConsultants();
   }, []);
 
-  // Create admission fields with populated consultant options
   const getAdmissionFieldsWithConsultants = () => {
     return admissionFields.map(field => {
       if (field.isConsultantField) {
@@ -162,7 +159,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
       const formData = new FormData();
       let hasFiles = false;
 
-      // Add medical reports
       if (fileData.medicalReports && fileData.medicalReports.length > 0) {
         fileData.medicalReports.forEach((file) => {
           formData.append('medicalReports', file);
@@ -170,7 +166,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         });
       }
 
-      // Add ID proof
       if (fileData.idProof) {
         if (Array.isArray(fileData.idProof)) {
           fileData.idProof.forEach((file) => {
@@ -183,7 +178,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         }
       }
 
-      // Add consent form
       if (fileData.consentForm) {
         if (Array.isArray(fileData.consentForm)) {
           fileData.consentForm.forEach((file) => {
@@ -196,7 +190,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         }
       }
 
-      // Add other documents
       if (fileData.other && fileData.other.length > 0) {
         fileData.other.forEach((file) => {
           formData.append('other', file);
@@ -315,20 +308,16 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
                   );
                 }
 
-                // Clear form data after successful submission
                 resetForm();
-                dispatch(updateFormData({})); // Clear Redux form data
-                setGeneratedPatientId(null); // Clear generated patient ID
-                setSubmissionError(null); // Clear any previous errors
-                setUploadStatus(null); // Clear upload status
+                dispatch(updateFormData({}));
+                setGeneratedPatientId(null);
+                setSubmissionError(null);
+                setUploadStatus(null);
                 
-                // Show success message
                 setSuccessMessage("✅ Patient assigned successfully! Form has been cleared for next patient.");
                 
-                // Generate new patient ID for next assignment
                 fetchPatientId();
                 
-                // Clear success message after 5 seconds
                 setTimeout(() => {
                   setSuccessMessage(null);
                 }, 5000);

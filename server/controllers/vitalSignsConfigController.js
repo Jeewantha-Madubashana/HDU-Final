@@ -1,7 +1,14 @@
 import { VitalSignsConfig } from "../config/mysqlDB.js";
 import { Op } from "sequelize";
 
-// Get all vital signs configurations
+/**
+ * Retrieves all vital signs configurations (active and inactive)
+ * Super Admin only endpoint
+ * @route GET /api/vital-signs-config/all
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export const getAllVitalSignsConfig = async (req, res) => {
   try {
     const configs = await VitalSignsConfig.findAll({
@@ -17,7 +24,14 @@ export const getAllVitalSignsConfig = async (req, res) => {
   }
 };
 
-// Get active vital signs configurations only
+/**
+ * Retrieves only active vital signs configurations
+ * Used by forms and displays to show available vital signs
+ * @route GET /api/vital-signs-config/active
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export const getActiveVitalSignsConfig = async (req, res) => {
   try {
     const configs = await VitalSignsConfig.findAll({
@@ -34,7 +48,16 @@ export const getActiveVitalSignsConfig = async (req, res) => {
   }
 };
 
-// Get a single vital sign configuration by ID
+/**
+ * Retrieves a single vital sign configuration by ID
+ * Super Admin only endpoint
+ * @route GET /api/vital-signs-config/:id
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.id - ID of the vital sign configuration
+ * @param {Object} res - Express response object
+ */
 export const getVitalSignsConfigById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -56,7 +79,24 @@ export const getVitalSignsConfigById = async (req, res) => {
   }
 };
 
-// Create a new vital signs configuration
+/**
+ * Creates a new vital sign configuration
+ * Super Admin only endpoint
+ * @route POST /api/vital-signs-config
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Vital sign configuration data
+ * @param {string} req.body.name - Unique field name (e.g., "heartRate")
+ * @param {string} req.body.label - Display label (e.g., "Heart Rate (HR)")
+ * @param {string} [req.body.unit] - Unit of measurement (e.g., "bpm")
+ * @param {number} [req.body.normalRangeMin] - Minimum normal value
+ * @param {number} [req.body.normalRangeMax] - Maximum normal value
+ * @param {string} [req.body.dataType] - Data type ("integer", "decimal", "text")
+ * @param {boolean} [req.body.isActive] - Whether the vital sign is active
+ * @param {number} [req.body.displayOrder] - Display order in forms
+ * @param {string} [req.body.description] - Description of the vital sign
+ * @param {Object} res - Express response object
+ */
 export const createVitalSignsConfig = async (req, res) => {
   try {
     const {
@@ -71,14 +111,12 @@ export const createVitalSignsConfig = async (req, res) => {
       description,
     } = req.body;
 
-    // Validate required fields
     if (!name || !label) {
       return res.status(400).json({
         message: "Name and label are required",
       });
     }
 
-    // Check if name already exists
     const existing = await VitalSignsConfig.findOne({
       where: { name },
     });
@@ -114,7 +152,18 @@ export const createVitalSignsConfig = async (req, res) => {
   }
 };
 
-// Update a vital signs configuration
+/**
+ * Updates an existing vital sign configuration
+ * Name cannot be changed after creation
+ * Super Admin only endpoint
+ * @route PUT /api/vital-signs-config/:id
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.id - ID of the vital sign configuration
+ * @param {Object} req.body - Updated vital sign configuration data
+ * @param {Object} res - Express response object
+ */
 export const updateVitalSignsConfig = async (req, res) => {
   try {
     const { id } = req.params;
@@ -137,7 +186,6 @@ export const updateVitalSignsConfig = async (req, res) => {
       });
     }
 
-    // Update fields (name cannot be changed)
     const updateData = {};
     if (label !== undefined) updateData.label = label;
     if (unit !== undefined) updateData.unit = unit;
@@ -163,7 +211,16 @@ export const updateVitalSignsConfig = async (req, res) => {
   }
 };
 
-// Delete a vital signs configuration
+/**
+ * Deletes a vital sign configuration
+ * Super Admin only endpoint
+ * @route DELETE /api/vital-signs-config/:id
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.id - ID of the vital sign configuration to delete
+ * @param {Object} res - Express response object
+ */
 export const deleteVitalSignsConfig = async (req, res) => {
   try {
     const { id } = req.params;
@@ -190,7 +247,16 @@ export const deleteVitalSignsConfig = async (req, res) => {
   }
 };
 
-// Toggle active status
+/**
+ * Toggles the active status of a vital sign configuration
+ * Super Admin only endpoint
+ * @route PATCH /api/vital-signs-config/:id/toggle
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.id - ID of the vital sign configuration
+ * @param {Object} res - Express response object
+ */
 export const toggleVitalSignsConfigStatus = async (req, res) => {
   try {
     const { id } = req.params;

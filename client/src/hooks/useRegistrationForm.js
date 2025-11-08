@@ -71,7 +71,6 @@ export const useRegistrationForm = () => {
     onSubmit: async (values) => {
       try {
         const response = await register(values);
-        // Check if registration requires approval
         if (response?.requiresApproval || response?.status === "pending") {
           dispatch(
             showToast({ 

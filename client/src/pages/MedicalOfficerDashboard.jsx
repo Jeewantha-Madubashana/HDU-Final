@@ -75,8 +75,6 @@ const MedicalOfficerDashboard = () => {
 
   const deAssignBed = async (bed) => {
     try {
-      // The discharge process now handles bed deassignment
-      // Just refresh the beds data to show updated status
       fetchBeds();
       dispatch(
         showToast({

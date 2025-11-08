@@ -40,7 +40,6 @@ router.get(
   getCriticalFactorAuditHistory
 );
 
-// Get critical patients
 router.get(
   "/critical-patients",
   protect,
@@ -48,7 +47,6 @@ router.get(
   getCriticalPatients
 );
 
-// Acknowledge alert
 router.post(
   "/acknowledge-alert",
   protect,
@@ -56,7 +54,6 @@ router.post(
   acknowledgeAlert
 );
 
-// Get alert analytics
 router.get(
   "/analytics/alerts",
   protect,

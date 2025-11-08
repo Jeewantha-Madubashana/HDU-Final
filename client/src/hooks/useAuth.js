@@ -34,7 +34,6 @@ export const useAuth = () => {
     try {
       dispatch(setLoading(true));
       const response = await authApi.register(formData);
-      // Only set credentials if user is approved (has token)
       if (response.token) {
         dispatch(setCredentials(response));
       }

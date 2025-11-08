@@ -67,10 +67,7 @@ const NurseDashboard = () => {
     }
   };
 
-  // Nurses can only view patient details and update vitals
-  // They cannot assign or discharge patients
   const handleViewPatientDetails = (bed) => {
-    // This will be handled by the BedCard component's click functionality
   };
 
   const closeLogoutDialog = () => {

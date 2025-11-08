@@ -42,7 +42,10 @@ import { useNavigate } from "react-router-dom";
 import CriticalAlertsAnalytics from "./CriticalAlertsAnalytics";
 import PatientDetailsDialog from "./PatientDetailsDialog";
 
-// Mock data for charts (in a real app, this would come from the API)
+/**
+ * Mock data for charts - fallback when API data is unavailable
+ * Used to ensure charts always have data to display
+ */
 const mockVitalSignsData = {
   heartRate: [72, 75, 68, 80, 85, 78, 82, 76, 79, 81, 77, 74],
   bloodPressure: [120, 118, 125, 122, 128, 115, 130, 125, 122, 127, 120, 118],
@@ -62,6 +65,11 @@ const mockPatientDemographics = {
   ],
 };
 
+/**
+ * Analytics Dashboard component displaying comprehensive hospital metrics
+ * Shows bed occupancy, patient demographics, vital signs trends, and patient table
+ * @returns {JSX.Element} Analytics dashboard with multiple metric cards and charts
+ */
 const AnalyticsDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [beds, setBeds] = useState([]);
@@ -94,12 +102,15 @@ const AnalyticsDashboard = () => {
     fetchAnalyticsData();
   }, []);
 
+  /**
+   * Fetches all analytics data from the backend
+   * Includes beds, critical patients, patient analytics, and length of stay data
+   */
   const fetchAnalyticsData = async () => {
     setLoading(true);
     try {
       const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
       
-      // Check if token exists
       if (!token) {
         console.error("No authentication token found");
         dispatch(
@@ -111,7 +122,6 @@ const AnalyticsDashboard = () => {
         return;
       }
 
-      // Fetch beds data
       let bedsResponse;
       try {
         bedsResponse = await axios.get(`${BASE_URL}/beds`, {
@@ -128,7 +138,6 @@ const AnalyticsDashboard = () => {
         return;
       }
 
-      // Fetch critical patients with error handling
       let criticalPatients = 0;
       try {
         const criticalResponse = await axios.get(`${BASE_URL}/critical-factors/critical-patients`, {
@@ -146,19 +155,17 @@ const AnalyticsDashboard = () => {
             })
           );
           navigate("/login");
-          return;
-        } else {
-          dispatch(
-            showToast({
-              message: "Failed to fetch critical patients data",
-              type: "warning",
-            })
-          );
-        }
-        // Continue with default value (0)
+              return;
+            } else {
+              dispatch(
+                showToast({
+                  message: "Failed to fetch critical patients data",
+                  type: "warning",
+                })
+              );
+            }
       }
 
-      // Fetch ALOS data
       let alosResponse = {};
       try {
         alosResponse = await getAverageLengthOfStay();
@@ -170,10 +177,8 @@ const AnalyticsDashboard = () => {
             type: "warning",
           })
         );
-        // Continue with default values
       }
 
-      // Fetch patient analytics (demographics and vital signs trends)
       let patientAnalytics = {
         genderDistribution: [],
         ageGroups: [],
@@ -192,21 +197,16 @@ const AnalyticsDashboard = () => {
             type: "warning",
           })
         );
-        // Continue with default values
       }
 
-      // Calculate analytics
       const bedsData = bedsResponse.data;
-      // Count occupied beds - bed must have patientId AND patient must exist
       const occupiedBeds = bedsData.filter(bed => bed.patientId !== null && bed.Patient).length;
       const totalBeds = bedsData.length;
       const availableBeds = totalBeds - occupiedBeds;
       const bedOccupancy = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
-      // Store beds data for table
       setBeds(bedsData);
 
-      // Format vital signs trends - ensure we have arrays with at least some data
       const vitalSignsTrends = {
         heartRate: patientAnalytics.vitalSignsTrends?.heartRate?.length > 0 
           ? patientAnalytics.vitalSignsTrends.heartRate 
@@ -219,10 +219,9 @@ const AnalyticsDashboard = () => {
           : mockVitalSignsData.temperature,
         spO2: patientAnalytics.vitalSignsTrends?.spO2?.length > 0 
           ? patientAnalytics.vitalSignsTrends.spO2 
-          : mockVitalSignsData.spO2,
+                : mockVitalSignsData.spO2,
       };
 
-      // Format demographics
       const demographics = {
         ageGroups: patientAnalytics.ageGroups?.length > 0 
           ? patientAnalytics.ageGroups 
