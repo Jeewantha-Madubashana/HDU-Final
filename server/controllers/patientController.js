@@ -12,10 +12,42 @@ import path from "path";
 function getChangedValues(oldValues, newValues) {
   const changes = {};
   for (const key in newValues) {
-    if (!oldValues || oldValues[key] !== newValues[key]) {
+    const oldVal = oldValues ? oldValues[key] : null;
+    const newVal = newValues[key];
+    
+    // Skip if both values are null/undefined
+    if (oldVal == null && newVal == null) {
+      continue;
+    }
+    
+    // Special handling for Date objects and date strings
+    let hasChanged = false;
+    if (oldVal instanceof Date || newVal instanceof Date || 
+        (typeof oldVal === 'string' && oldVal.includes('T') && oldVal.includes('Z')) ||
+        (typeof newVal === 'string' && newVal.includes('T') && newVal.includes('Z'))) {
+      // Compare dates by converting to timestamps
+      const oldDate = oldVal ? new Date(oldVal) : null;
+      const newDate = newVal ? new Date(newVal) : null;
+      
+      if (oldDate == null && newDate == null) {
+        hasChanged = false;
+      } else if (oldDate == null || newDate == null) {
+        hasChanged = true;
+      } else {
+        // Compare timestamps (ignore milliseconds for comparison)
+        const oldTime = Math.floor(oldDate.getTime() / 1000);
+        const newTime = Math.floor(newDate.getTime() / 1000);
+        hasChanged = oldTime !== newTime;
+      }
+    } else {
+      // Regular comparison for non-date values
+      hasChanged = oldVal !== newVal;
+    }
+    
+    if (hasChanged) {
       changes[key] = {
-        old: oldValues ? oldValues[key] : null,
-        new: newValues[key],
+        old: oldVal,
+        new: newVal,
       };
     }
   }
@@ -520,15 +552,29 @@ export async function updateIncompletePatient(req, res) {
     // Allow updates for all patients (not just urgent admissions)
     // This enables "View Full Details" to edit any patient anytime
 
+    // Validate required fields: only fullName and gender are required for incomplete patient updates
+    const fullName = patientData.fullName !== undefined ? patientData.fullName : patient.fullName;
+    const gender = patientData.gender !== undefined ? patientData.gender : patient.gender;
+
+    if (!fullName || !fullName.trim()) {
+      await transaction.rollback();
+      return res.status(400).json({ msg: "Full name is required" });
+    }
+
+    if (!gender || !gender.trim()) {
+      await transaction.rollback();
+      return res.status(400).json({ msg: "Gender is required" });
+    }
+
     console.log("Updating patient:", patientId, "Data:", JSON.stringify(patientData, null, 2));
 
     const oldPatientValues = patient.toJSON();
     const updateData = {
-      fullName: patientData.fullName !== undefined ? patientData.fullName : patient.fullName,
+      fullName: fullName.trim(),
       nicPassport: patientData.nicPassport !== undefined ? (patientData.nicPassport || null) : patient.nicPassport,
       dateOfBirth: patientData.dateOfBirth !== undefined ? (patientData.dateOfBirth || null) : patient.dateOfBirth,
       age: patientData.age !== undefined ? (patientData.age ? parseInt(patientData.age) : null) : patient.age,
-      gender: patientData.gender !== undefined ? (patientData.gender || null) : patient.gender,
+      gender: gender.trim(),
       maritalStatus: patientData.maritalStatus !== undefined ? patientData.maritalStatus : (patient.maritalStatus || "Unknown"),
       contactNumber: patientData.contactNumber !== undefined ? (patientData.contactNumber || null) : patient.contactNumber,
       email: patientData.email !== undefined ? (patientData.email || null) : patient.email,
@@ -551,6 +597,8 @@ export async function updateIncompletePatient(req, res) {
       );
     }
 
+    // Emergency Contact is completely optional for incomplete patient updates
+    // Only create/update if all three fields (name, relationship, contactNumber) are provided
     if (patientData.emergencyContactName !== undefined || patientData.emergencyContactRelationship !== undefined || patientData.emergencyContactNumber !== undefined) {
       const existingContact = await EmergencyContact.findOne({
         where: { patientId: patient.id, isPrimary: true },
@@ -565,42 +613,50 @@ export async function updateIncompletePatient(req, res) {
 
       console.log("Emergency Contact Data:", contactData);
 
-      if (existingContact) {
-        const oldContactValues = existingContact.toJSON();
-        await existingContact.update(contactData, { transaction });
-        const contactChanges = getChangedValues(oldContactValues, contactData);
-        if (Object.keys(contactChanges).length > 0) {
+      // Only create/update if all three fields have non-empty values
+      // Emergency contact is optional - skip if any field is missing
+      const hasValidData = contactData.name && contactData.relationship && contactData.contactNumber;
+
+      if (hasValidData) {
+        if (existingContact) {
+          const oldContactValues = existingContact.toJSON();
+          await existingContact.update(contactData, { transaction });
+          const contactChanges = getChangedValues(oldContactValues, contactData);
+          if (Object.keys(contactChanges).length > 0) {
+            await logPatientAudit(
+              userId,
+              "UPDATE",
+              "emergency_contacts",
+              existingContact.id,
+              oldContactValues,
+              contactData,
+              `Emergency contact information updated`,
+              transaction
+            );
+          }
+          console.log("Updated existing emergency contact");
+        } else {
+          const newContact = await EmergencyContact.create({
+            patientId: patient.id,
+            name: contactData.name,
+            relationship: contactData.relationship,
+            contactNumber: contactData.contactNumber,
+            isPrimary: true,
+          }, { transaction });
           await logPatientAudit(
             userId,
-            "UPDATE",
+            "CREATE",
             "emergency_contacts",
-            existingContact.id,
-            oldContactValues,
+            newContact.id,
+            null,
             contactData,
-            `Emergency contact information updated`,
+            `Emergency contact information created`,
             transaction
           );
+          console.log("Created new emergency contact");
         }
-        console.log("Updated existing emergency contact");
       } else {
-        const newContact = await EmergencyContact.create({
-          patientId: patient.id,
-          name: contactData.name,
-          relationship: contactData.relationship,
-          contactNumber: contactData.contactNumber,
-          isPrimary: true,
-        }, { transaction });
-        await logPatientAudit(
-          userId,
-          "CREATE",
-          "emergency_contacts",
-          newContact.id,
-          null,
-          contactData,
-          `Emergency contact information created`,
-          transaction
-        );
-        console.log("Created new emergency contact");
+        console.log("Skipping emergency contact update - insufficient data provided");
       }
     }
 
@@ -675,43 +731,53 @@ export async function updateIncompletePatient(req, res) {
         transaction
       });
 
-      const admissionData = {
-        admissionDateTime: patientData.admissionDateTime !== undefined 
-          ? (patientData.admissionDateTime ? new Date(patientData.admissionDateTime) : (existingAdmission ? existingAdmission.admissionDateTime : new Date()))
-          : (existingAdmission ? existingAdmission.admissionDateTime : new Date()),
-        department: patientData.department !== undefined 
-          ? (patientData.department || "HDU")
-          : (existingAdmission ? existingAdmission.department : "HDU"),
-        consultantInCharge: patientData.consultantInCharge !== undefined 
-          ? (patientData.consultantInCharge || null)
-          : (existingAdmission ? existingAdmission.consultantInCharge : null),
-      };
+      // Only include fields that are explicitly provided in the update
+      const admissionData = {};
+      
+      if (patientData.admissionDateTime !== undefined) {
+        // Only update if explicitly provided
+        admissionData.admissionDateTime = patientData.admissionDateTime 
+          ? new Date(patientData.admissionDateTime) 
+          : (existingAdmission ? existingAdmission.admissionDateTime : new Date());
+      }
+      
+      if (patientData.department !== undefined) {
+        admissionData.department = patientData.department || "HDU";
+      }
+      
+      if (patientData.consultantInCharge !== undefined) {
+        admissionData.consultantInCharge = patientData.consultantInCharge || null;
+      }
 
       console.log("Admission Data:", admissionData);
 
       if (existingAdmission) {
-        const oldAdmissionValues = existingAdmission.toJSON();
-        await existingAdmission.update(admissionData, { transaction });
-        const admissionChanges = getChangedValues(oldAdmissionValues, admissionData);
-        if (Object.keys(admissionChanges).length > 0) {
-          await logPatientAudit(
-            userId,
-            "UPDATE",
-            "admissions",
-            existingAdmission.id,
-            oldAdmissionValues,
-            admissionData,
-            `Admission details updated`,
-            transaction
-          );
+        // Only update if there are actual changes
+        if (Object.keys(admissionData).length > 0) {
+          const oldAdmissionValues = existingAdmission.toJSON();
+          await existingAdmission.update(admissionData, { transaction });
+          const admissionChanges = getChangedValues(oldAdmissionValues, admissionData);
+          if (Object.keys(admissionChanges).length > 0) {
+            await logPatientAudit(
+              userId,
+              "UPDATE",
+              "admissions",
+              existingAdmission.id,
+              oldAdmissionValues,
+              admissionData,
+              `Admission details updated`,
+              transaction
+            );
+          }
         }
         console.log("Updated existing admission");
       } else {
+        // Create new admission with provided data or defaults
         const newAdmission = await Admission.create({
           patientId: patient.id,
-          admissionDateTime: admissionData.admissionDateTime,
-          department: admissionData.department,
-          consultantInCharge: admissionData.consultantInCharge,
+          admissionDateTime: admissionData.admissionDateTime || new Date(),
+          department: admissionData.department || "HDU",
+          consultantInCharge: admissionData.consultantInCharge || null,
           status: "Active",
         }, { transaction });
         await logPatientAudit(

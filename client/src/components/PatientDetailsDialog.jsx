@@ -117,7 +117,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
     nicPassport: Yup.string().nullable(),
     dateOfBirth: Yup.date().nullable(),
     age: Yup.number().nullable().min(0).max(150),
-    gender: Yup.string().nullable().oneOf(["Male", "Female", "Other", null]),
+    gender: Yup.string().required("Gender is required").oneOf(["Male", "Female", "Other"]),
     maritalStatus: Yup.string().nullable(),
     contactNumber: Yup.string().nullable(),
     email: Yup.string().email("Invalid email").nullable(),
@@ -788,7 +788,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
           <Box>
             <Grid container spacing={3}>
               {/* Patient Details */}
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <DetailSection
                   title="Patient Details"
                   icon={<Person sx={{ color: "primary.main", fontSize: "28px" }} />}
@@ -847,7 +847,7 @@ const PatientDetailsDialog = ({ open, onClose, patient, bedNumber, onUpdate }) =
               </Grid>
 
               {/* Emergency Contact and Medical Information */}
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <DetailSection
                   title="Emergency Contact Information"
                   icon={<ContactEmergency sx={{ color: "primary.main", fontSize: "28px" }} />}

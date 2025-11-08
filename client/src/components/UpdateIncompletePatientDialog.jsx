@@ -136,7 +136,7 @@ const UpdateIncompletePatientDialog = ({ open, onClose, patientId, onUpdate }) =
     nicPassport: Yup.string().nullable(),
     dateOfBirth: Yup.date().nullable(),
     age: Yup.number().nullable().min(0).max(150),
-    gender: Yup.string().nullable().oneOf(["Male", "Female", "Other", null]),
+    gender: Yup.string().required("Gender is required").oneOf(["Male", "Female", "Other"]),
     maritalStatus: Yup.string().nullable(),
     contactNumber: Yup.string().nullable(),
     email: Yup.string().email("Invalid email").nullable(),
