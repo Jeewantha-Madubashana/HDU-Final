@@ -32,6 +32,13 @@ import {
 } from '@mui/icons-material';
 import { getPatientDocuments, downloadPatientDocument, deletePatientDocument } from '../api/documentApi';
 
+/**
+ * Patient Documents Viewer component
+ * Displays and manages patient documents with download and delete capabilities
+ * @param {number} patientId - ID of the patient whose documents are being viewed
+ * @param {boolean} open - Controls dialog visibility
+ * @param {Function} onClose - Callback when dialog is closed
+ */
 const PatientDocumentsViewer = ({ patientId, open, onClose }) => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -63,7 +70,6 @@ const PatientDocumentsViewer = ({ patientId, open, onClose }) => {
     try {
       const response = await downloadPatientDocument(fileDocument.id);
       
-      // Create a blob from the response and trigger download
       const blob = new Blob([response.data], { type: fileDocument.fileType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

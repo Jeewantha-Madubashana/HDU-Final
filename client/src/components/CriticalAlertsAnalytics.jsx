@@ -35,7 +35,12 @@ import { useSelector, useDispatch } from "react-redux";
 import { showToast } from "../features/ui/uiSlice";
 import { getAlertAnalytics } from "../api/vitalSignsApi";
 
-// Utility function to format alert types for display
+/**
+ * Formats alert type strings for display
+ * Converts snake_case to readable format
+ * @param {string} alertType - Alert type in snake_case format
+ * @returns {string} Formatted alert type string
+ */
 const formatAlertType = (alertType) => {
   if (!alertType || alertType === 'None') return 'None';
   
@@ -56,6 +61,12 @@ const formatAlertType = (alertType) => {
   return formatMap[alertType] || alertType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
+/**
+ * Critical Alerts Analytics component
+ * Displays analytics and statistics for alert acknowledgments
+ * Shows alerts by type, user, day, and hour with summary statistics
+ * @returns {JSX.Element} Analytics dashboard for alert data
+ */
 const CriticalAlertsAnalytics = () => {
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState('7');

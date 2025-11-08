@@ -359,17 +359,17 @@ async function initializeDatabase() {
     console.log('👥 Creating sample users...');
     await createSampleUsers();
     
-    // Create beds (12 ICU beds)
-    console.log('🛏️ Creating ICU beds...');
+    // Create beds (10 HDU beds)
+    console.log('🛏️ Creating HDU beds...');
     const beds = [];
-    for (let i = 1; i <= 12; i++) {
+    for (let i = 1; i <= 10; i++) {
       beds.push({
-        bedNumber: `ICU-${String(i).padStart(2, '0')}`,
+        bedNumber: `HDU-${String(i).padStart(2, '0')}`,
         patientId: null
       });
     }
     await BedMySQL.bulkCreate(beds);
-    console.log('✅ Created 12 ICU beds');
+    console.log('✅ Created 10 HDU beds');
     
     // Create realistic patients with full medical scenarios
     console.log('👤 Creating realistic patients...');
@@ -432,7 +432,7 @@ async function initializeDatabase() {
         { where: { id: bedId } }
       );
       
-      console.log(`   ✅ Patient ${patient.fullName} assigned to bed ICU-${String(bedId).padStart(2, '0')}`);
+      console.log(`   ✅ Patient ${patient.fullName} assigned to bed HDU-${String(bedId).padStart(2, '0')}`);
       console.log(`   📊 Created ${criticalFactorUpdates.length} vital sign records`);
     }
     
@@ -440,7 +440,7 @@ async function initializeDatabase() {
     console.log('\n📊 Summary:');
     console.log(`   • Database tables: Created and synchronized`);
     console.log(`   • Users: 3 sample users created`);
-    console.log(`   • Beds: 12 ICU beds created`);
+    console.log(`   • Beds: 10 HDU beds created`);
     console.log(`   • Patients: 5 realistic patients with complete medical records`);
     console.log(`   • Vital signs: Multiple time-series data for each patient`);
     console.log(`   • Simulation: Ready for ICU monitoring and alerts`);
@@ -449,7 +449,7 @@ async function initializeDatabase() {
     console.log('\n👥 Patient Summary:');
     for (const patientInfo of realisticPatients) {
       const { patientData, bedId, patientType } = patientInfo;
-      console.log(`   • ${patientData.fullName} (${patientType}) - Bed ICU-${String(bedId).padStart(2, '0')}`);
+      console.log(`   • ${patientData.fullName} (${patientType}) - Bed HDU-${String(bedId).padStart(2, '0')}`);
       console.log(`     Diagnosis: ${patientData.initialDiagnosis}`);
     }
     

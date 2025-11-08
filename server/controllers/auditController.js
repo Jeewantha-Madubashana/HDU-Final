@@ -1,6 +1,16 @@
 import { AuditLog, UserMySQLModel as User } from "../config/mysqlDB.js";
 import { Op } from "sequelize";
 
+/**
+ * Retrieves audit history for a specific table and record
+ * @route GET /api/audit/:tableName/:recordId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {string} req.params.tableName - Name of the table
+ * @param {number} req.params.recordId - ID of the record
+ * @param {Object} res - Express response object
+ */
 export const getAuditHistory = async (req, res) => {
   try {
     const { tableName, recordId } = req.params;
@@ -31,14 +41,23 @@ export const getAuditHistory = async (req, res) => {
   }
 };
 
+/**
+ * Retrieves analytics for alert acknowledgments
+ * Groups alerts by type, user, day, and hour for reporting
+ * @route GET /api/audit/alert-analytics
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.query - Query parameters
+ * @param {string} [req.query.timeRange='7'] - Number of days to analyze (default: 7)
+ * @param {Object} res - Express response object
+ */
 export const getAlertAnalytics = async (req, res) => {
   try {
-    const { timeRange = '7' } = req.query; // Default to 7 days
+    const { timeRange = '7' } = req.query;
     const daysAgo = parseInt(timeRange);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysAgo);
 
-    // Get all alert acknowledgments
     const alertAcknowledgments = await AuditLog.findAll({
       where: {
         action: "ACKNOWLEDGE",
@@ -57,7 +76,6 @@ export const getAlertAnalytics = async (req, res) => {
       order: [["timestamp", "DESC"]],
     });
 
-    // Process the data for analytics
     const analytics = {
       totalAlerts: alertAcknowledgments.length,
       alertsByType: {},
@@ -65,9 +83,9 @@ export const getAlertAnalytics = async (req, res) => {
       alertsByDay: {},
       alertsByHour: {},
       responseTimeAnalysis: {
-        averageResponseTime: 0, // This would need to be calculated based on alert creation vs acknowledgment
-        quickResponses: 0, // < 5 minutes
-        slowResponses: 0, // > 30 minutes
+        averageResponseTime: 0,
+        quickResponses: 0,
+        slowResponses: 0,
       },
       recentAlerts: alertAcknowledgments.slice(0, 10).map(log => ({
         id: log.id,
@@ -82,13 +100,11 @@ export const getAlertAnalytics = async (req, res) => {
       }))
     };
 
-    // Group by alert type
     alertAcknowledgments.forEach(log => {
       const alertType = log.newValues?.alertType || 'Unknown';
       analytics.alertsByType[alertType] = (analytics.alertsByType[alertType] || 0) + 1;
     });
 
-    // Group by user
     alertAcknowledgments.forEach(log => {
       const userName = log.user?.nameWithInitials || 'Unknown';
       const userRole = log.user?.role || 'Unknown';
@@ -96,7 +112,6 @@ export const getAlertAnalytics = async (req, res) => {
       analytics.alertsByUser[userKey] = (analytics.alertsByUser[userKey] || 0) + 1;
     });
 
-    // Group by day (last 7 days)
     for (let i = daysAgo - 1; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -111,7 +126,6 @@ export const getAlertAnalytics = async (req, res) => {
       }
     });
 
-    // Group by hour of day (0-23)
     for (let hour = 0; hour < 24; hour++) {
       analytics.alertsByHour[hour] = 0;
     }
@@ -121,7 +135,6 @@ export const getAlertAnalytics = async (req, res) => {
       analytics.alertsByHour[hour]++;
     });
 
-    // Calculate some basic stats
     const alertTypes = Object.keys(analytics.alertsByType);
     const mostCommonAlertType = alertTypes.reduce((a, b) => 
       analytics.alertsByType[a] > analytics.alertsByType[b] ? a : b, 

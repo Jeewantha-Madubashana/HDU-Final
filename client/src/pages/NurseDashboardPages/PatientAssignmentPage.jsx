@@ -5,8 +5,6 @@ import {
   Box,
   IconButton,
   Alert,
-  Paper,
-  Container,
   Divider,
 } from "@mui/material";
 import { Formik, Form } from "formik";
@@ -37,7 +35,7 @@ import {
 } from "../../components/NurseDashboardForms/PatientDialog/config/formFields";
 import { validationSchema } from "../../components/NurseDashboardForms/PatientDialog/validationSchema";
 
-const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
+const PatientAssignmentPage = ({ handleSubmit, onClose, onCancel, isSubmitting, setIsSubmitting }) => {
   const dispatch = useDispatch();
   const { selectedBed, formData } = useSelector((state) => state.patient);
   const [submissionError, setSubmissionError] = useState(null);
@@ -47,13 +45,17 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
   const [isGeneratingId, setIsGeneratingId] = useState(true);
   const [consultants, setConsultants] = useState([]);
   const [isLoadingConsultants, setIsLoadingConsultants] = useState(true);
+  
   const handleCancel = () => {
     dispatch(resetForm());
     dispatch(setLoading(false));
-    if (onClose) onClose();
+    if (onCancel) {
+      onCancel();
+    } else if (onClose) {
+      onClose();
+    }
   };
 
-  // Generate unique patient ID when component mounts
   useEffect(() => {
     const fetchPatientId = async () => {
       try {
@@ -71,7 +73,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     fetchPatientId();
   }, []);
 
-  // Load consultants when component mounts
   useEffect(() => {
     const fetchConsultants = async () => {
       try {
@@ -89,7 +90,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     fetchConsultants();
   }, []);
 
-  // Create admission fields with populated consultant options
   const getAdmissionFieldsWithConsultants = () => {
     return admissionFields.map(field => {
       if (field.isConsultantField) {
@@ -121,24 +121,67 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
       bedId: selectedBed?.id,
     };
 
+    // Normalize dateOfBirth - only set if valid, otherwise null
     if (normalizedData.dateOfBirth) {
       try {
-        normalizedData.dateOfBirth = new Date(normalizedData.dateOfBirth)
-          .toISOString()
-          .split("T")[0];
+        const date = new Date(normalizedData.dateOfBirth);
+        if (!isNaN(date.getTime())) {
+          normalizedData.dateOfBirth = date.toISOString().split("T")[0];
+        } else {
+          normalizedData.dateOfBirth = null;
+        }
       } catch (e) {
         console.error("Error formatting date of birth:", e);
+        normalizedData.dateOfBirth = null;
       }
+    } else {
+      normalizedData.dateOfBirth = null;
+    }
+
+    // Normalize age - convert empty string to null
+    if (normalizedData.age === '' || normalizedData.age === undefined) {
+      normalizedData.age = null;
+    }
+
+    // Normalize other optional fields to null if empty
+    if (!normalizedData.nicPassport || normalizedData.nicPassport === '') {
+      normalizedData.nicPassport = null;
+    }
+    if (!normalizedData.contactNumber || normalizedData.contactNumber === '') {
+      normalizedData.contactNumber = null;
+    }
+    if (!normalizedData.email || normalizedData.email === '') {
+      normalizedData.email = null;
+    }
+    if (!normalizedData.address || normalizedData.address === '') {
+      normalizedData.address = null;
     }
 
     if (normalizedData.admissionDateTime) {
       try {
-        normalizedData.admissionDateTime = new Date(
-          normalizedData.admissionDateTime
-        ).toISOString();
+        const date = new Date(normalizedData.admissionDateTime);
+        if (!isNaN(date.getTime())) {
+          normalizedData.admissionDateTime = date.toISOString();
+        } else {
+          normalizedData.admissionDateTime = null;
+        }
       } catch (e) {
         console.error("Error formatting admission date time:", e);
+        normalizedData.admissionDateTime = null;
       }
+    } else {
+      normalizedData.admissionDateTime = null;
+    }
+
+    // Normalize optional medical and admission fields
+    if (!normalizedData.initialDiagnosis || normalizedData.initialDiagnosis === '') {
+      normalizedData.initialDiagnosis = null;
+    }
+    if (!normalizedData.consultantInCharge || normalizedData.consultantInCharge === '') {
+      normalizedData.consultantInCharge = null;
+    }
+    if (!normalizedData.department || normalizedData.department === '') {
+      normalizedData.department = 'HDU';
     }
 
     return normalizedData;
@@ -153,21 +196,15 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
     );
   };
   const processDocumentUploads = async (patientId, fileData) => {
-    console.log("📤 processDocumentUploads called with:", { patientId, fileData });
-    
     if (!hasDocuments(fileData)) {
-      console.log("📭 No documents to upload, returning early");
       return;
     }
-
-    console.log("📤 Starting document upload process...");
     setUploadStatus("uploading");
     dispatch(setLoading(true));
     try {
       const formData = new FormData();
       let hasFiles = false;
 
-      // Add medical reports
       if (fileData.medicalReports && fileData.medicalReports.length > 0) {
         fileData.medicalReports.forEach((file) => {
           formData.append('medicalReports', file);
@@ -175,7 +212,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         });
       }
 
-      // Add ID proof
       if (fileData.idProof) {
         if (Array.isArray(fileData.idProof)) {
           fileData.idProof.forEach((file) => {
@@ -188,7 +224,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         }
       }
 
-      // Add consent form
       if (fileData.consentForm) {
         if (Array.isArray(fileData.consentForm)) {
           fileData.consentForm.forEach((file) => {
@@ -201,7 +236,6 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         }
       }
 
-      // Add other documents
       if (fileData.other && fileData.other.length > 0) {
         fileData.other.forEach((file) => {
           formData.append('other', file);
@@ -209,20 +243,16 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
         });
       }
 
-      console.log("Uploading documents for patient:", patientId);
-
       if (!hasFiles) {
-        console.log("No files to upload, skipping API call");
         setUploadStatus("success");
         dispatch(setLoading(false));
         return;
       }
 
-      const response = await uploadPatientDocuments(
+      await uploadPatientDocuments(
         patientId,
         formData
       );
-      console.log("Document upload response:", response);
       setUploadStatus("success");
     } catch (error) {
       console.error("Document upload error:", error);
@@ -233,32 +263,37 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
   };
 
   return (
-    <Container maxWidth="lg">
-      <Paper sx={{ borderRadius: 2, overflow: "hidden", mb: 4 }}>
-        <Box
-          sx={{
-            bgcolor: "primary.main",
+    <>
+      <Box
+        sx={{
+          bgcolor: "primary.main",
+          color: "white",
+          py: 2.5,
+          px: 3,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          position: "relative",
+          zIndex: 1,
+          flexShrink: 0,
+        }}
+      >
+        <Typography component="h1" variant="h6" fontWeight="bold">
+          Assign Patient to Bed {selectedBed?.bedNumber}
+        </Typography>
+        <IconButton
+          aria-label="close"
+          onClick={handleCancel}
+          sx={{ 
             color: "white",
-            py: 2.5,
-            px: 3,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
+            "&:hover": { bgcolor: "rgba(255,255,255,0.1)" }
           }}
         >
-          <Typography component="h1" variant="h6" fontWeight="bold">
-            Assign Patient to {selectedBed?.bedNumber}
-          </Typography>
-          <IconButton
-            aria-label="close"
-            onClick={handleCancel}
-            sx={{ color: "white" }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </Box>
+          <CloseIcon />
+        </IconButton>
+      </Box>
 
-        <Box sx={{ p: 4, bgcolor: "#f5f8fa" }}>
+      <Box sx={{ p: 4, bgcolor: "#f5f8fa", flex: 1, overflowY: "auto", minHeight: 0 }}>
           {submissionError && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {submissionError}
@@ -284,6 +319,7 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
             enableReinitialize={true}
             validationSchema={validationSchema}
             onSubmit={async (values, { setSubmitting, resetForm }) => {
+              if (setIsSubmitting) setIsSubmitting(true);
               setSubmitting(true);
               setSubmissionError(null);
               dispatch(setLoading(true));
@@ -308,53 +344,32 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
                 const normalizedData = normalizeFormData(values);
                 const patientResponse = await handleSubmit(normalizedData);
 
-                // Debug logging for document upload
-                console.log("📁 File data for upload:", fileData);
-                console.log("📋 Has documents?", hasDocuments(fileData));
-                console.log("👤 Patient response:", patientResponse);
-
                 if (
                   patientResponse &&
                   patientResponse.patientId &&
                   hasDocuments(fileData)
                 ) {
-                  console.log(
-                    "✅ Patient created with ID:",
-                    patientResponse.patientId
-                  );
-                  console.log("🚀 Starting document upload process...");
                   await processDocumentUploads(
                     patientResponse.patientId,
                     fileData
                   );
-                } else {
-                  console.log(
-                    "⚠️ Patient created, but no documents to upload or invalid response:",
+                } else if (!patientResponse?.patientId) {
+                  console.error(
+                    "Missing patient ID in response:",
                     patientResponse
                   );
-                  if (!patientResponse?.patientId) {
-                    console.error(
-                      "Missing patient ID in response:",
-                      patientResponse
-                    );
-                  }
                 }
 
-                // Clear form data after successful submission
-                console.log("🧹 Clearing form data after successful submission...");
                 resetForm();
-                dispatch(updateFormData({})); // Clear Redux form data
-                setGeneratedPatientId(null); // Clear generated patient ID
-                setSubmissionError(null); // Clear any previous errors
-                setUploadStatus(null); // Clear upload status
+                dispatch(updateFormData({}));
+                setGeneratedPatientId(null);
+                setSubmissionError(null);
+                setUploadStatus(null);
                 
-                // Show success message
                 setSuccessMessage("✅ Patient assigned successfully! Form has been cleared for next patient.");
                 
-                // Generate new patient ID for next assignment
                 fetchPatientId();
                 
-                // Clear success message after 5 seconds
                 setTimeout(() => {
                   setSuccessMessage(null);
                 }, 5000);
@@ -367,6 +382,7 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
                   "An error occurred while submitting the form. Please try again."
                 );
               } finally {
+                if (setIsSubmitting) setIsSubmitting(false);
                 setSubmitting(false);
                 dispatch(setLoading(false));
               }
@@ -374,7 +390,7 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
           >
             {(formikProps) => {
               return (
-                <Form>
+                <Form id="patient-assignment-form">
                   <Typography
                     variant="h6"
                     color="primary"
@@ -416,52 +432,12 @@ const PatientAssignmentPage = ({ handleSubmit, onClose }) => {
                       * Required fields
                     </Typography>
                   </Box>
-                  <Box
-                    sx={{
-                      mt: 4,
-                      px: 1,
-                      pb: 3,
-                      display: "flex",
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <Button
-                      onClick={handleCancel}
-                      variant="outlined"
-                      color="secondary"
-                      sx={{
-                        borderRadius: 2,
-                        px: 3.5,
-                        py: 1.2,
-                        mr: 2,
-                        textTransform: "none",
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="primary"
-                      sx={{
-                        borderRadius: 2,
-                        px: 4,
-                        py: 1.2,
-                        fontWeight: "medium",
-                        textTransform: "none",
-                      }}
-                      disabled={formikProps.isSubmitting}
-                    >
-                      Assign Patient
-                    </Button>
-                  </Box>
                 </Form>
               );
             }}
           </Formik>
         </Box>
-      </Paper>
-    </Container>
+    </>
   );
 };
 

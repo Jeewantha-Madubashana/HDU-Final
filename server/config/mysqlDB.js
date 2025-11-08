@@ -9,6 +9,7 @@ import definePatientDocument from "../models/patients/PatientDocument.js";
 import defineUser from "../models/UserMySQL.js";
 import defineCriticalFactor from "../models/patients/CriticalFactor.js";
 import defineAuditLog from "../models/AuditLog.js";
+import defineVitalSignsConfig from "../models/VitalSignsConfig.js";
 
 const BedMySQL = defineBed(sequelize);
 const Patient = definePatient(sequelize);
@@ -19,6 +20,7 @@ const PatientDocument = definePatientDocument(sequelize);
 const UserMySQLModel = defineUser(sequelize);
 const CriticalFactor = defineCriticalFactor(sequelize);
 const AuditLog = defineAuditLog(sequelize);
+const VitalSignsConfig = defineVitalSignsConfig(sequelize);
 
 const defineAssociations = () => {
   Patient.hasMany(Admission, { foreignKey: "patientId", as: "admissions" });
@@ -109,7 +111,6 @@ const createSuperAdmin = async () => {
     const superAdminUsername = "SUPER_ADMIN";
     const superAdminPassword = 'zV38~6m{~3"';
     
-    // Check if super admin already exists
     const existingSuperAdmin = await UserMySQLModel.findOne({
       where: { username: superAdminUsername },
     });
@@ -147,12 +148,9 @@ const connectMySql = async () => {
     await sequelize.authenticate();
     console.log("MySQL connection has been established successfully.");
 
-    // Temporarily disable sync to avoid "too many keys" error
-    // The tables already exist and have the correct structure
     console.log("Skipping model sync - using existing database structure");
     console.log("All models ready");
 
-    // Create Super Admin
     await createSuperAdmin();
 
     const bedCount = await BedMySQL.count();
@@ -181,4 +179,5 @@ export {
   UserMySQLModel,
   CriticalFactor,
   AuditLog,
+  VitalSignsConfig,
 };

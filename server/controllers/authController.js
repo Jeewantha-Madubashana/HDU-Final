@@ -5,6 +5,19 @@ import { UserMySQLModel as User } from "../config/mysqlDB.js";
 
 const { sign } = jwt;
 
+/**
+ * Registers a new user account
+ * All new accounts (except Super Admin) are set to "pending" status and require approval
+ * @route POST /api/auth/register
+ * @access Public
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - User registration data
+ * @param {string} req.body.username - Unique username
+ * @param {string} req.body.password - User password (will be hashed)
+ * @param {string} req.body.email - User email address
+ * @param {string} req.body.role - User role (Nurse, Consultant, etc.)
+ * @param {Object} res - Express response object
+ */
 export async function register(req, res) {
   const {
     username,
@@ -24,14 +37,12 @@ export async function register(req, res) {
     let user = await UserRepository.findByUsername(username);
     if (user) return res.status(400).json({ msg: "Username already exists" });
 
-    // Check if email already exists
     const existingEmail = await User.findOne({ where: { email } });
     if (existingEmail) return res.status(400).json({ msg: "Email already exists" });
 
     const salt = await genSalt(10);
     const hashedPassword = await hash(password, salt);
 
-    // Set status as pending for all new registrations (except Super Admin)
     const status = role === "Super Admin" ? "approved" : "pending";
 
     user = await UserRepository.createUser({
@@ -49,7 +60,6 @@ export async function register(req, res) {
       grade,
     });
 
-    // Return success message but no token - user needs approval
     res.status(201).json({ 
       msg: "Registration successful. Your account is pending approval by Super Admin.",
       status: "pending",
@@ -61,6 +71,17 @@ export async function register(req, res) {
   }
 }
 
+/**
+ * Authenticates a user and returns JWT token if approved
+ * Rejects login for pending or rejected accounts with detailed error messages
+ * @route POST /api/auth/login
+ * @access Public
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Login credentials
+ * @param {string} req.body.username - User username
+ * @param {string} req.body.password - User password
+ * @param {Object} res - Express response object
+ */
 export async function login(req, res) {
   const { username, password } = req.body;
 
@@ -71,7 +92,6 @@ export async function login(req, res) {
     const isMatch = await compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: "Invalid credentials" });
 
-    // Check if user is approved
     if (user.status !== "approved") {
       if (user.status === "pending") {
         return res.status(403).json({ 
@@ -122,6 +142,13 @@ export async function login(req, res) {
   }
 }
 
+/**
+ * Retrieves all approved consultants for dropdown/selection purposes
+ * @route GET /api/auth/consultants
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getConsultants(req, res) {
   try {
     const consultants = await User.findAll({
@@ -143,7 +170,14 @@ export async function getConsultants(req, res) {
   }
 }
 
-// Super Admin endpoints
+/**
+ * Retrieves all users with pending approval status
+ * Super Admin only endpoint
+ * @route GET /api/auth/pending-users
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getPendingUsers(req, res) {
   try {
     const pendingUsers = await UserRepository.getPendingUsers();
@@ -157,6 +191,14 @@ export async function getPendingUsers(req, res) {
   }
 }
 
+/**
+ * Retrieves all users in the system
+ * Super Admin only endpoint
+ * @route GET /api/auth/all-users
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getAllUsers(req, res) {
   try {
     const users = await UserRepository.getAllUsers();
@@ -170,6 +212,16 @@ export async function getAllUsers(req, res) {
   }
 }
 
+/**
+ * Approves a pending user account
+ * Super Admin only endpoint
+ * @route POST /api/auth/approve/:userId
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.userId - ID of the user to approve
+ * @param {Object} res - Express response object
+ */
 export async function approveUser(req, res) {
   try {
     const { userId } = req.params;
@@ -198,6 +250,16 @@ export async function approveUser(req, res) {
   }
 }
 
+/**
+ * Rejects a pending user account
+ * Super Admin only endpoint
+ * @route POST /api/auth/reject/:userId
+ * @access Private (Super Admin only)
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.userId - ID of the user to reject
+ * @param {Object} res - Express response object
+ */
 export async function rejectUser(req, res) {
   try {
     const { userId } = req.params;

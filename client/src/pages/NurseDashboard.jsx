@@ -43,7 +43,6 @@ const NurseDashboard = () => {
   useEffect(() => {
     dispatch(setAppBarTitle("Nurse Dashboard - Bed Management"));
     if (!token) {
-      console.log("No token found, redirecting to login");
       navigate("/login");
       return;
     }
@@ -68,11 +67,11 @@ const NurseDashboard = () => {
     }
   };
 
-  // Nurses can only view patient details and update vitals
-  // They cannot assign or discharge patients
+  const handleUrgentAssign = async () => {
+    await fetchBeds();
+  };
+
   const handleViewPatientDetails = (bed) => {
-    // This will be handled by the BedCard component's click functionality
-    console.log("View patient details for bed:", bed.bedNumber);
   };
 
   const closeLogoutDialog = () => {
@@ -99,14 +98,7 @@ const NurseDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Nurse Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome, {user?.fullName}. Manage patient bed assignments and monitor critical alerts.
-        </Typography>
-      </Box>
+
 
       {/* Critical Alerts System */}
       <Box sx={{ mb: 3 }}>
@@ -148,6 +140,7 @@ const NurseDashboard = () => {
                   bed={bed}
                   assignBed={null}
                   deassignBed={null}
+                  onUrgentAssign={handleUrgentAssign}
                 />
               </Grid>
             ))}

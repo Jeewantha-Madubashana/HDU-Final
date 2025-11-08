@@ -13,6 +13,28 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import { MuiTelInput } from "mui-tel-input";
 
+/**
+ * Reusable form field component supporting multiple input types
+ * Handles text, number, date, select, file upload, and telephone inputs
+ * @param {string} name - Field name
+ * @param {string} label - Field label
+ * @param {string} [type='text'] - Input type
+ * @param {boolean} [multiline=false] - Whether field supports multiline
+ * @param {number} [rows] - Number of rows for multiline fields
+ * @param {boolean} [select=false] - Whether field is a select dropdown
+ * @param {Array} [options=[]] - Options for select fields
+ * @param {Object} touched - Formik touched object
+ * @param {Object} errors - Formik errors object
+ * @param {Function} handleChange - Formik change handler
+ * @param {Function} handleBlur - Formik blur handler
+ * @param {boolean} [required=false] - Whether field is required
+ * @param {string} [accept] - File types to accept for file inputs
+ * @param {boolean} [multiple] - Whether file input accepts multiple files
+ * @param {Function} setFieldValue - Formik setFieldValue function
+ * @param {Object} values - Formik values object
+ * @param {string} [helperText] - Helper text to display
+ * @param {boolean} [disabled=false] - Whether field is disabled
+ */
 const FormField = ({
   name,
   label,
@@ -92,11 +114,30 @@ const FormField = ({
       const selectedFiles = event.currentTarget.files;
       
       if (multiple) {
-        // For multiple files, always store as array
-        const filesArray = Array.from(selectedFiles);
-        setFieldValue(name, filesArray.length > 0 ? filesArray : null);
+        const newFilesArray = Array.from(selectedFiles);
+        // Get existing files for this field
+        const existingFiles = values[name];
+        const existingFilesArray = existingFiles 
+          ? (Array.isArray(existingFiles) ? existingFiles : [existingFiles])
+          : [];
+        
+        // Combine existing files with new files, avoiding duplicates by name
+        const combinedFiles = [...existingFilesArray];
+        newFilesArray.forEach(newFile => {
+          // Check if file with same name already exists
+          const exists = combinedFiles.some(existingFile => 
+            existingFile.name === newFile.name && existingFile.size === newFile.size
+          );
+          if (!exists) {
+            combinedFiles.push(newFile);
+          }
+        });
+        
+        setFieldValue(name, combinedFiles.length > 0 ? combinedFiles : null);
+        
+        // Reset the input to allow selecting the same file again if needed
+        event.target.value = '';
       } else {
-        // For single file, store as single file object
         setFieldValue(name, selectedFiles.length > 0 ? selectedFiles[0] : null);
       }
     };
@@ -366,22 +407,6 @@ const FormField = ({
             </MenuItem>
           ))}
       </Field>
-      {touched[name] && errors[name] && (
-        <FormHelperText
-          error
-          sx={{
-            ml: 1.5,
-            mt: 0.5,
-            fontSize: "0.75rem",
-            fontWeight: "500",
-            color: "error.main",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          {errors[name]}
-        </FormHelperText>
-      )}
     </Box>
   );
 };

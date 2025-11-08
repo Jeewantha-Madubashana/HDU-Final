@@ -42,6 +42,12 @@ import { showToast } from "../features/ui/uiSlice";
 import { useDispatch } from "react-redux";
 import axios from "axios";
 
+/**
+ * Bed Management Dashboard component
+ * Provides interface for viewing, searching, and managing beds
+ * Supports filtering by status and searching by bed number or patient name
+ * @returns {JSX.Element} Bed management dashboard with search and filter capabilities
+ */
 const BedManagementDashboard = () => {
   const [beds, setBeds] = useState([]);
   const [filteredBeds, setFilteredBeds] = useState([]);
@@ -90,10 +96,12 @@ const BedManagementDashboard = () => {
     }
   };
 
+  /**
+   * Filters beds based on search term and status filter
+   */
   const filterBeds = () => {
     let filtered = beds;
 
-    // Filter by status
     if (statusFilter !== "all") {
       filtered = filtered.filter((bed) => {
         if (statusFilter === "occupied") return bed.patientId !== null;
@@ -102,7 +110,6 @@ const BedManagementDashboard = () => {
       });
     }
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter((bed) => {
         const searchLower = searchTerm.toLowerCase();
@@ -175,8 +182,13 @@ const BedManagementDashboard = () => {
   };
 
   const handleAssignBed = (bed) => {
-    // This will be handled by the parent component
-    console.log("Assign bed:", bed);
+    setSelectedBed(bed);
+    dispatch({ type: "patient/setSelectedBed", payload: bed });
+    dispatch({ type: "patient/setDialogOpen", payload: true });
+  };
+
+  const handleUrgentAssign = async () => {
+    await fetchBeds();
   };
 
   const handleDeassignBed = async (bed) => {
@@ -226,14 +238,7 @@ const BedManagementDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Bed Management Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Manage patient bed assignments and monitor occupancy
-        </Typography>
-      </Box>
+
 
       {/* Statistics Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>

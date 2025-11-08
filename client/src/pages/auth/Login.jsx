@@ -62,7 +62,6 @@ const Login = () => {
       const errorStatus = errorData.status;
       
       if (isApprovalError) {
-        // Set approval error with details
         setApprovalError({
           title: errorMessage,
           detail: errorData.detail || errorMessage,
@@ -71,7 +70,6 @@ const Login = () => {
         });
         setErrors({});
       } else {
-        // Regular error
         setErrors({ general: errorMessage });
         setApprovalError(null);
       }

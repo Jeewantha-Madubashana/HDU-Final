@@ -19,12 +19,13 @@ const defineAdmission = (sequelize) => {
         defaultValue: DataTypes.NOW,
       },
       department: {
-        type: DataTypes.ENUM("ICU", "Surgery", "Medical"),
+        type: DataTypes.ENUM("ICU", "Surgery", "Medical", "HDU"),
         allowNull: false,
+        defaultValue: "HDU",
       },
       consultantInCharge: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       dischargeDateTime: {
         type: DataTypes.DATE,

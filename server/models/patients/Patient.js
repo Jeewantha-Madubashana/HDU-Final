@@ -16,24 +16,24 @@ const definePatient = (sequelize) => {
       },
       fullName: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       nicPassport: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
         unique: true,
       },
       dateOfBirth: {
         type: DataTypes.DATEONLY,
-        allowNull: false,
+        allowNull: true,
       },
       age: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       gender: {
         type: DataTypes.ENUM("Male", "Female", "Other"),
-        allowNull: false,
+        allowNull: true,
       },
       maritalStatus: {
         type: DataTypes.ENUM(
@@ -47,7 +47,7 @@ const definePatient = (sequelize) => {
       },
       contactNumber: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
       },
       email: {
         type: DataTypes.STRING,
@@ -55,13 +55,20 @@ const definePatient = (sequelize) => {
       },
       address: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
+      },
+      isUrgentAdmission: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
+      isIncomplete: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
       },
     },
     {
       timestamps: true,
       tableName: "patients",
-      // Removed duplicate indexes - unique constraints are already defined in field definitions
     }
   );
 

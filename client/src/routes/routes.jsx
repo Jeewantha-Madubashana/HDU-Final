@@ -8,6 +8,7 @@ import NurseDashboard from "../pages/NurseDashboard";
 import LandingPage from "../pages/LandingPage";
 import ConsultantDashboard from "../pages/ConsultantDashboard";
 import SuperAdminDashboard from "../pages/SuperAdminDashboard";
+import VitalSignsManagement from "../pages/VitalSignsManagement";
 import MainLayout from "../layouts/MainLayout";
 import PatientAssignmentContainer from "../pages/NurseDashboardPages/PatientAssignmentContainer";
 import { useSelector } from "react-redux";
@@ -74,6 +75,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute role="Super Admin">
               <SuperAdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/vital-signs-management"
+          element={
+            <ProtectedRoute role="Super Admin">
+              <VitalSignsManagement />
             </ProtectedRoute>
           }
         />

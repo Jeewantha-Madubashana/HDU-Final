@@ -44,7 +44,6 @@ const HouseOfficerDashboard = () => {
   useEffect(() => {
     dispatch(setAppBarTitle("House Officer Dashboard - Bed Management"));
     if (!token) {
-      console.log("No token found, redirecting to login");
       navigate("/login");
       return;
     }
@@ -76,8 +75,6 @@ const HouseOfficerDashboard = () => {
 
   const deAssignBed = async (bed) => {
     try {
-      // The discharge process now handles bed deassignment
-      // Just refresh the beds data to show updated status
       fetchBeds();
       dispatch(
         showToast({
@@ -95,6 +92,10 @@ const HouseOfficerDashboard = () => {
       );
       console.error(err);
     }
+  };
+
+  const handleUrgentAssign = async () => {
+    await fetchBeds();
   };
 
   const handleSubmit = async (values) => {
@@ -151,14 +152,7 @@ const HouseOfficerDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          House Officer Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome, {user?.fullName}. Manage patient bed assignments, monitor critical alerts, and provide patient care.
-        </Typography>
-      </Box>
+
 
       {/* Critical Alerts System */}
       <Box sx={{ mb: 3 }}>
@@ -180,13 +174,7 @@ const HouseOfficerDashboard = () => {
       {/* Tab Content */}
       {selectedTab === 0 && (
         <Card sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h5" gutterBottom>
-            Bed Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Click on an available bed to assign a patient, or use the action buttons on occupied beds. 
-            As a House Officer, you can admit patients, update vitals, and discharge patients.
-          </Typography>
+   
           
           <Grid
             container
@@ -200,6 +188,7 @@ const HouseOfficerDashboard = () => {
                   bed={bed}
                   assignBed={handleAssignBed}
                   deassignBed={deAssignBed}
+                  onUrgentAssign={handleUrgentAssign}
                 />
               </Grid>
             ))}

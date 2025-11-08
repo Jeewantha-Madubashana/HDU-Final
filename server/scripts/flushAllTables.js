@@ -9,6 +9,7 @@ import {
   Patient,
   BedMySQL,
   UserMySQLModel,
+  VitalSignsConfig,
 } from "../config/mysqlDB.js";
 
 /**
@@ -89,7 +90,9 @@ async function flushAllTables() {
     console.log(`   • Users: ${userCount} records deleted`);
     console.log("");
     console.log("⚠️  Note: All data has been deleted. Table structures remain intact.");
+    console.log("   Super Admin will be recreated automatically when server starts.");
     console.log("   Run 'npm run init-db' to populate with sample data if needed.");
+    console.log("   Run 'npm run init-vital-signs' to initialize vital signs configuration.");
 
   } catch (error) {
     console.error("❌ Error flushing tables:", error);

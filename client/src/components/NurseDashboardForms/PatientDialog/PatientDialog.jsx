@@ -3,6 +3,12 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { setDialogOpen } from "../../../features/patients/patientSlice";
 
+/**
+ * Patient Dialog component for Nurse role
+ * Navigates to patient assignment page for nurses
+ * Other roles are handled by parent component
+ * @param {Function} handleSubmit - Submit handler function
+ */
 const PatientDialog = ({ handleSubmit }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -11,15 +17,11 @@ const PatientDialog = ({ handleSubmit }) => {
   React.useEffect(() => {
     dispatch(setDialogOpen(true));
     
-    // Only navigate to nurse-specific route if user is a Nurse
     if (user?.role === "Nurse") {
       navigate("/nurse-dashboard/patient-assignment");
     }
-    // For other roles (Consultant, Medical Officer, House Officer), stay on current page
-    // The dialog will be handled by the parent component
   }, [dispatch, navigate, user?.role]);
 
-  // If not a nurse, don't render anything (parent component will handle the dialog)
   if (user?.role !== "Nurse") {
     return null;
   }

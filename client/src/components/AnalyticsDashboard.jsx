@@ -42,7 +42,10 @@ import { useNavigate } from "react-router-dom";
 import CriticalAlertsAnalytics from "./CriticalAlertsAnalytics";
 import PatientDetailsDialog from "./PatientDetailsDialog";
 
-// Mock data for charts (in a real app, this would come from the API)
+/**
+ * Mock data for charts - fallback when API data is unavailable
+ * Used to ensure charts always have data to display
+ */
 const mockVitalSignsData = {
   heartRate: [72, 75, 68, 80, 85, 78, 82, 76, 79, 81, 77, 74],
   bloodPressure: [120, 118, 125, 122, 128, 115, 130, 125, 122, 127, 120, 118],
@@ -62,6 +65,11 @@ const mockPatientDemographics = {
   ],
 };
 
+/**
+ * Analytics Dashboard component displaying comprehensive hospital metrics
+ * Shows bed occupancy, patient demographics, vital signs trends, and patient table
+ * @returns {JSX.Element} Analytics dashboard with multiple metric cards and charts
+ */
 const AnalyticsDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [beds, setBeds] = useState([]);
@@ -94,12 +102,15 @@ const AnalyticsDashboard = () => {
     fetchAnalyticsData();
   }, []);
 
+  /**
+   * Fetches all analytics data from the backend
+   * Includes beds, critical patients, patient analytics, and length of stay data
+   */
   const fetchAnalyticsData = async () => {
     setLoading(true);
     try {
       const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
       
-      // Check if token exists
       if (!token) {
         console.error("No authentication token found");
         dispatch(
@@ -111,13 +122,11 @@ const AnalyticsDashboard = () => {
         return;
       }
 
-      // Fetch beds data
       let bedsResponse;
       try {
         bedsResponse = await axios.get(`${BASE_URL}/beds`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("🚀 ~ fetchAnalyticsData ~ bedsResponse:", bedsResponse);
       } catch (error) {
         console.error("Error fetching beds data:", error);
         dispatch(
@@ -129,13 +138,11 @@ const AnalyticsDashboard = () => {
         return;
       }
 
-      // Fetch critical patients with error handling
       let criticalPatients = 0;
       try {
         const criticalResponse = await axios.get(`${BASE_URL}/critical-factors/critical-patients`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("🚀 ~ fetchAnalyticsData ~ criticalResponse:", criticalResponse);
         criticalPatients = criticalResponse.data?.length || 0;
       } catch (error) {
         console.error("Error fetching critical patients:", error);
@@ -148,19 +155,17 @@ const AnalyticsDashboard = () => {
             })
           );
           navigate("/login");
-          return;
-        } else {
-          dispatch(
-            showToast({
-              message: "Failed to fetch critical patients data",
-              type: "warning",
-            })
-          );
-        }
-        // Continue with default value (0)
+              return;
+            } else {
+              dispatch(
+                showToast({
+                  message: "Failed to fetch critical patients data",
+                  type: "warning",
+                })
+              );
+            }
       }
 
-      // Fetch ALOS data
       let alosResponse = {};
       try {
         alosResponse = await getAverageLengthOfStay();
@@ -172,18 +177,47 @@ const AnalyticsDashboard = () => {
             type: "warning",
           })
         );
-        // Continue with default values
       }
 
-      // Calculate analytics
+      let patientAnalytics = {
+        genderDistribution: [],
+        ageGroups: [],
+        vitalSignsTrends: mockVitalSignsData,
+      };
+      try {
+        const analyticsResponse = await axios.get(`${BASE_URL}/patients/analytics`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        patientAnalytics = analyticsResponse.data;
+      } catch (error) {
+        console.error("Error fetching patient analytics:", error);
+        dispatch(
+          showToast({
+            message: "Failed to fetch patient analytics",
+            type: "warning",
+          })
+        );
+      }
+
       const bedsData = bedsResponse.data;
-      const occupiedBeds = bedsData.filter(bed => bed.patientId !== null).length;
+      const occupiedBeds = bedsData.filter(bed => bed.patientId !== null && bed.Patient).length;
       const totalBeds = bedsData.length;
       const availableBeds = totalBeds - occupiedBeds;
       const bedOccupancy = totalBeds > 0 ? (occupiedBeds / totalBeds) * 100 : 0;
 
-      // Store beds data for table
       setBeds(bedsData);
+
+      const vitalSignsTrends = {
+        heartRate: patientAnalytics.vitalSignsTrends?.heartRate || [],
+        bloodPressure: patientAnalytics.vitalSignsTrends?.bloodPressure || [],
+        temperature: patientAnalytics.vitalSignsTrends?.temperature || [],
+        spO2: patientAnalytics.vitalSignsTrends?.spO2 || [],
+      };
+
+      const demographics = {
+        ageGroups: patientAnalytics.ageGroups || [],
+        gender: patientAnalytics.genderDistribution || [],
+      };
 
       setAnalyticsData({
         bedOccupancy: Math.round(bedOccupancy),
@@ -195,8 +229,8 @@ const AnalyticsDashboard = () => {
         maxStay: alosResponse.maxStay || 0,
         currentPatients: alosResponse.currentPatients || 0,
         currentAvgStay: parseFloat(alosResponse.currentAvgStay || 0),
-        vitalSignsTrends: mockVitalSignsData,
-        demographics: mockPatientDemographics,
+        vitalSignsTrends: vitalSignsTrends,
+        demographics: demographics,
         bedAvailability: [
           { label: "Available", value: availableBeds, color: "#4CAF50" },
           { label: "Occupied", value: occupiedBeds, color: "#F44336" },
@@ -432,7 +466,6 @@ const AnalyticsDashboard = () => {
       console.error("No patient data provided");
       return;
     }
-    console.log("Opening patient details for:", patient.fullName, "Bed:", bedNumber);
     setSelectedPatient(patient);
     setSelectedBedNumber(bedNumber);
     setDialogOpen(true);
@@ -495,7 +528,6 @@ const AnalyticsDashboard = () => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log("Row clicked for patient:", patient.fullName);
                         handlePatientClick(patient, bed.bedNumber);
                       }}
                     >
@@ -563,9 +595,7 @@ const AnalyticsDashboard = () => {
     <Box>
       {/* Header with refresh button */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5" gutterBottom>
-          Analytics Dashboard
-        </Typography>
+
         <Tooltip title="Refresh Data">
           <IconButton onClick={fetchAnalyticsData} disabled={loading}>
             <RefreshIcon />
@@ -636,13 +666,13 @@ const AnalyticsDashboard = () => {
         </Grid>
 
         {/* Critical Alerts by Type */}
-        <Grid item xs={12} md={6}>
+        {/* <Grid item xs={12} md={6}>
           <SimpleBarChart
             data={[5, 3, 2, 1]} // Heart Rate, BP, SpO2, Temperature
             title="Critical Alerts by Type"
             labels={["Heart Rate", "Blood Pressure", "SpO2", "Temperature"]}
           />
-        </Grid>
+        </Grid> */}
 
         {/* Patient Demographics - Gender */}
         <Grid item xs={12} md={6}>
@@ -653,9 +683,9 @@ const AnalyticsDashboard = () => {
         </Grid>
 
         {/* Vital Signs Summary Table */}
-        <Grid item xs={12}>
+        {/* <Grid item xs={12}>
           <VitalSignsTable />
-        </Grid>
+        </Grid> */}
 
         {/* Patients in Beds Table */}
         <Grid item xs={12}>

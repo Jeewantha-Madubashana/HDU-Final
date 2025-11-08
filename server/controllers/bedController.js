@@ -5,14 +5,20 @@ import { generatePatientNumber } from "../utils/generators.js";
 import fs from "fs";
 import path from "path";
 
+/**
+ * Retrieves all beds with associated patient information
+ * Includes complete patient details, medical records, emergency contacts, and active admissions
+ * @route GET /api/beds
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 export async function getBeds(req, res) {
   try {
-    // Get all beds
     const beds = await BedMySQL.findAll({
       attributes: ["id", "bedNumber", "patientId", "createdAt", "updatedAt"],
     });
     
-    // Get all patients with related data
     const patients = await Patient.findAll({
       attributes: [
         "id", 
@@ -26,6 +32,8 @@ export async function getBeds(req, res) {
         "age",
         "maritalStatus",
         "address", 
+        "isUrgentAdmission",
+        "isIncomplete",
         "createdAt"
       ],
       include: [
@@ -65,12 +73,10 @@ export async function getBeds(req, res) {
       ]
     });
     
-    // Create a map of patients for quick lookup
     const patientMap = {};
     patients.forEach(patient => {
       const patientData = patient.toJSON();
       
-      // Merge related data into patient object
       if (patientData.medicalRecords && patientData.medicalRecords.length > 0) {
         const medicalRecord = patientData.medicalRecords[0];
         patientData.knownAllergies = medicalRecord.knownAllergies;
@@ -101,7 +107,6 @@ export async function getBeds(req, res) {
       patientMap[patientData.id] = patientData;
     });
     
-    // Combine beds with patient data
     const bedsWithPatients = beds.map(bed => {
       const bedData = bed.toJSON();
       if (bedData.patientId && patientMap[bedData.patientId]) {
@@ -110,7 +115,6 @@ export async function getBeds(req, res) {
       return bedData;
     });
     
-    console.log("Beds with patients:", JSON.stringify(bedsWithPatients, null, 2));
     res.json(bedsWithPatients);
   } catch (err) {
     console.error("Error in getBeds:", err);
@@ -118,6 +122,15 @@ export async function getBeds(req, res) {
   }
 }
 
+/**
+ * Retrieves a specific bed by ID with detailed patient information
+ * @route GET /api/beds/:bedId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.bedId - ID of the bed
+ * @param {Object} res - Express response object
+ */
 export async function getBedById(req, res) {
   try {
     const { bedId } = req.params;
@@ -135,7 +148,6 @@ export async function getBedById(req, res) {
       return res.status(404).json({ msg: "Bed not found" });
     }
 
-    // If bed has a patient, get detailed patient information
     if (bed.patientId) {
       const patient = await Patient.findOne({
         where: { id: bed.patientId },
@@ -151,6 +163,8 @@ export async function getBedById(req, res) {
           "age",
           "maritalStatus",
           "address", 
+          "isUrgentAdmission",
+          "isIncomplete",
           "createdAt"
         ],
         include: [
@@ -193,7 +207,6 @@ export async function getBedById(req, res) {
       if (patient) {
         const patientData = patient.toJSON();
         
-        // Merge related data into patient object
         if (patientData.medicalRecords && patientData.medicalRecords.length > 0) {
           const medicalRecord = patientData.medicalRecords[0];
           patientData.knownAllergies = medicalRecord.knownAllergies;
@@ -232,9 +245,18 @@ export async function getBedById(req, res) {
   }
 }
 
+/**
+ * Retrieves beds filtered by occupancy status
+ * @route GET /api/beds/status
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.query - Query parameters
+ * @param {string} req.query.status - Filter status ('occupied' or 'available')
+ * @param {Object} res - Express response object
+ */
 export async function getBedsByStatus(req, res) {
   try {
-    const { status } = req.query; // 'occupied' or 'available'
+    const { status } = req.query;
     
     let whereClause = {};
     if (status === 'occupied') {
@@ -248,7 +270,6 @@ export async function getBedsByStatus(req, res) {
       attributes: ["id", "bedNumber", "patientId", "createdAt", "updatedAt"],
     });
 
-    // Get all patients with related data for occupied beds
     const patientIds = beds.filter(bed => bed.patientId).map(bed => bed.patientId);
     const patients = await Patient.findAll({
       where: { id: patientIds },
@@ -264,6 +285,8 @@ export async function getBedsByStatus(req, res) {
         "age",
         "maritalStatus",
         "address", 
+        "isUrgentAdmission",
+        "isIncomplete",
         "createdAt"
       ],
       include: [
@@ -300,16 +323,14 @@ export async function getBedsByStatus(req, res) {
             "status"
           ]
         }
-      ]
-    });
-
-    // Create a map of patients for quick lookup
-    const patientMap = {};
-    patients.forEach(patient => {
-      const patientData = patient.toJSON();
+        ]
+      });
       
-      // Merge related data into patient object
-      if (patientData.medicalRecords && patientData.medicalRecords.length > 0) {
+      const patientMap = {};
+      patients.forEach(patient => {
+        const patientData = patient.toJSON();
+        
+        if (patientData.medicalRecords && patientData.medicalRecords.length > 0) {
         const medicalRecord = patientData.medicalRecords[0];
         patientData.knownAllergies = medicalRecord.knownAllergies;
         patientData.medicalHistory = medicalRecord.medicalHistory;
@@ -339,7 +360,6 @@ export async function getBedsByStatus(req, res) {
       patientMap[patientData.id] = patientData;
     });
 
-    // Combine beds with patient data
     const bedsWithPatients = beds.map(bed => {
       const bedData = bed.toJSON();
       if (bedData.patientId && patientMap[bedData.patientId]) {
@@ -355,6 +375,16 @@ export async function getBedsByStatus(req, res) {
   }
 }
 
+/**
+ * Updates bed information
+ * @route PUT /api/beds/:bedId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.bedId - ID of the bed to update
+ * @param {Object} req.body - Updated bed data
+ * @param {Object} res - Express response object
+ */
 export async function updateBed(req, res) {
   try {
     const { bedId } = req.params;
@@ -385,6 +415,18 @@ export async function updateBed(req, res) {
   }
 }
 
+/**
+ * Assigns a patient to a bed
+ * Creates new patient or uses existing patient if NIC matches
+ * Creates admission record and links patient to bed
+ * @route POST /api/beds/:bedId/assign
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.bedId - ID of the bed to assign
+ * @param {Object} req.body - Patient data and admission information
+ * @param {Object} res - Express response object
+ */
 export async function assignBed(req, res) {
   try {
     const { patientData } = req.body;
@@ -395,11 +437,6 @@ export async function assignBed(req, res) {
       return res.status(400).json({ msg: "Bed ID is required" });
     }
 
-    if (!patientData || Object.keys(patientData).length === 0) {
-      console.error("Patient data is missing or empty");
-      return res.status(400).json({ msg: "Patient data is required" });
-    }
-    
     const bed = await BedMySQL.findOne({ where: { id: bedId } });
     if (!bed) {
       console.error("Bed not found:", bedId);
@@ -412,22 +449,30 @@ export async function assignBed(req, res) {
     }
 
     try {
-      // Check if patient with same NIC already exists
-      let existingPatient = null;
-      if (patientData.nicPassport) {
-        existingPatient = await Patient.findOne({
-          where: { nicPassport: patientData.nicPassport }
-        });
-      }
-
+      const isUrgentAdmission = patientData.isUrgentAdmission === true;
+      
       let result;
-      if (existingPatient) {
-        // Use existing patient
-        console.log("Using existing patient with NIC:", patientData.nicPassport);
-        result = await patientRepository.createAdmissionForExistingPatient(existingPatient.id, patientData);
+      
+      if (isUrgentAdmission) {
+        result = await patientRepository.createUrgentPatient(patientData);
       } else {
-        // Create new patient
-        result = await patientRepository.createPatient(patientData);
+        if (!patientData || Object.keys(patientData).length === 0) {
+          console.error("Patient data is missing or empty");
+          return res.status(400).json({ msg: "Patient data is required" });
+        }
+
+        let existingPatient = null;
+        if (patientData.nicPassport) {
+          existingPatient = await Patient.findOne({
+            where: { nicPassport: patientData.nicPassport }
+          });
+        }
+
+        if (existingPatient) {
+          result = await patientRepository.createAdmissionForExistingPatient(existingPatient.id, patientData);
+        } else {
+          result = await patientRepository.createPatient(patientData);
+        }
       }
 
       const [updatedCount] = await BedMySQL.update(
@@ -436,11 +481,24 @@ export async function assignBed(req, res) {
       );
 
       if (updatedCount > 0) {
+        let existingPatient = null;
+        if (!isUrgentAdmission && patientData?.nicPassport) {
+          existingPatient = await Patient.findOne({
+            where: { nicPassport: patientData.nicPassport }
+          });
+        }
+        
         return res.json({
-          msg: existingPatient ? "Bed assigned to existing patient successfully" : "Bed assigned successfully",
+          msg: isUrgentAdmission 
+            ? "Urgent patient assigned to bed successfully. Please update patient details later."
+            : existingPatient 
+            ? "Bed assigned to existing patient successfully" 
+            : "Bed assigned successfully",
           patientId: result.patient.id,
           patientNumber: result.patient.patientNumber,
           admissionId: result.admission.id,
+          isUrgentAdmission: isUrgentAdmission || false,
+          isIncomplete: result.patient.isIncomplete || false,
         });
       } else {
         console.error("Failed to update the bed:", bedId);
@@ -459,6 +517,16 @@ export async function assignBed(req, res) {
   }
 }
 
+/**
+ * Deassigns a patient from a bed (discharge)
+ * Deletes all patient documents and closes active admissions
+ * @route DELETE /api/beds/:bedId
+ * @access Private
+ * @param {Object} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.bedId - ID of the bed to deassign
+ * @param {Object} res - Express response object
+ */
 export async function deAssignBed(req, res) {
   try {
     const { bedId } = req.params;
@@ -480,19 +548,14 @@ export async function deAssignBed(req, res) {
     }
     if (bed.patientId) {
       try {
-        // Delete all patient documents before discharge
         const patientDocuments = await PatientDocument.findAll({
           where: { patientId: bed.patientId }
         });
 
-        console.log(`Found ${patientDocuments.length} documents for patient ${bed.patientId}, deleting...`);
-
         for (const doc of patientDocuments) {
           try {
-            // Delete physical file
             let cleanPath = doc.fileUrl;
             if (cleanPath.startsWith('/uploads/uploads/')) {
-              // Fix double uploads path from old format
               cleanPath = cleanPath.replace('/uploads/uploads/', '/uploads/');
             }
             if (cleanPath.startsWith('/uploads/')) {
@@ -502,14 +565,11 @@ export async function deAssignBed(req, res) {
             
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
-              console.log(`Deleted file: ${filePath}`);
             } else {
               console.warn(`File not found: ${filePath}`);
             }
 
-            // Delete database record
             await doc.destroy();
-            console.log(`Deleted document record: ${doc.fileName}`);
           } catch (fileError) {
             console.error(`Error deleting document ${doc.fileName}:`, fileError.message);
           }
@@ -565,8 +625,6 @@ export async function debugPatients(req, res) {
       attributes: ["id", "bedNumber", "patientId"],
     });
     
-    console.log("Patients:", JSON.stringify(patients, null, 2));
-    console.log("Beds:", JSON.stringify(beds, null, 2));
     
     res.json({
       patients: patients,

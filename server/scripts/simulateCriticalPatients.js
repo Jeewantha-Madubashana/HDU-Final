@@ -279,9 +279,9 @@ async function simulateCriticalPatients() {
     
     console.log('✅ Database cleared successfully');
     
-    // Ensure beds exist (1-12 for HDU)
+    // Ensure beds exist (1-10 for HDU)
     console.log('🛏️ Setting up beds...');
-    for (let i = 1; i <= 12; i++) {
+    for (let i = 1; i <= 10; i++) {
       await BedMySQL.upsert({
         id: i,
         bedNumber: `HDU-${String(i).padStart(2, '0')}`,

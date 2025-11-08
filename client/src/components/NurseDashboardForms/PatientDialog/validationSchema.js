@@ -5,13 +5,16 @@ export const personalInfoValidationSchema = Yup.object({
     .required("Full Name is required")
     .min(3, "Name must be at least 3 characters"),
   nicPassport: Yup.string()
-    .required("NIC/Passport Number is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .min(5, "Invalid NIC/Passport number"),
   dateOfBirth: Yup.date()
-    .required("Birth Date is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .max(new Date(), "Birth date cannot be in the future"),
   age: Yup.number()
-    .required("Age is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .positive("Age must be positive")
     .max(150, "Invalid age")
     .integer("Age must be a whole number"),
@@ -21,11 +24,12 @@ export const personalInfoValidationSchema = Yup.object({
   maritalStatus: Yup.string()
     .nullable()
     .oneOf(
-      ["Single", "Married", "Divorced", "Widowed", null],
+      ["Single", "Married", "Divorced", "Widowed", "Unknown", null],
       "Invalid marital status"
     ),
   contactNumber: Yup.string()
-    .required("Contact Number is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .matches(/^[0-9+\-\s()]*$/, "Invalid phone number format"),
   email: Yup.string()
     .nullable()
@@ -35,19 +39,23 @@ export const personalInfoValidationSchema = Yup.object({
 
 export const emergencyContactValidationSchema = Yup.object({
   emergencyContactName: Yup.string()
-    .required("Emergency Contact Name is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .min(3, "Name must be at least 3 characters"),
   emergencyContactRelationship: Yup.string()
-    .required("Relationship is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .oneOf(
-      ["Spouse", "Parent", "Child", "Friend", "Other"],
+      ["Spouse", "Parent", "Child", "Friend", "Other", null],
       "Invalid relationship"
     ),
   emergencyContactNumber: Yup.string()
-    .required("Emergency Contact Number is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .matches(/^[0-9+\-\s()]*$/, "Invalid phone number format"),
   address: Yup.string()
-    .required("Address is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .min(5, "Address is too short"),
 });
 
@@ -70,17 +78,19 @@ export const medicalDetailsValidationSchema = Yup.object({
   bloodType: Yup.string()
     .nullable()
     .oneOf(
-      ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-", null],
+      ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-", "Unknown", null],
       "Invalid blood type"
     ),
   initialDiagnosis: Yup.string()
-    .required("Initial Diagnosis is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .min(5, "Please provide a more detailed diagnosis"),
 });
 
 export const admissionDetailsValidationSchema = Yup.object({
   admissionDateTime: Yup.date()
-    .required("Admission Date & Time is required")
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
     .min(
       new Date(Date.now() - 24 * 60 * 60 * 1000),
       "Admission date cannot be more than 24 hours in the past"
@@ -90,9 +100,12 @@ export const admissionDetailsValidationSchema = Yup.object({
       "Admission date cannot be more than 24 hours in the future"
     ),
   department: Yup.string()
-    .required("Department/Ward is required")
-    .oneOf(["ICU", "Surgery", "Medical"], "Invalid department selection"),
-  consultantInCharge: Yup.string().required("Consultant In Charge is required"),
+    .nullable()
+    .transform((value) => (value === "" ? null : value))
+    .oneOf(["ICU", "Surgery", "Medical", "HDU", null], "Invalid department selection"),
+  consultantInCharge: Yup.string()
+    .nullable()
+    .transform((value) => (value === "" ? null : value)),
 });
 
 export const documentUploadValidationSchema = Yup.object({

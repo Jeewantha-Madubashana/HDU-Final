@@ -42,10 +42,17 @@ import { styled } from "@mui/material/styles";
 import DischargeDialog from "./DischargeDialog";
 import CriticalFactorsForm from "./CriticalFactorsForm";
 import PatientDocumentsViewer from "./PatientDocumentsViewer";
+import UpdateIncompletePatientDialog from "./UpdateIncompletePatientDialog";
+import PatientDetailsDialog from "./PatientDetailsDialog";
 import { fetchLatestVitalSigns } from "../api/vitalSignsApi";
+import axios from "axios";
+import { useSelector } from "react-redux";
+import { showToast } from "../features/ui/uiSlice";
+import { useDispatch } from "react-redux";
 
 const StyledCard = styled(Card)(({ theme, occupied }) => ({
-  height: "520px",
+  minHeight: "300px",
+  height: "auto",
   display: "flex",
   flexDirection: "column",
   position: "relative",
@@ -58,6 +65,12 @@ const StyledCard = styled(Card)(({ theme, occupied }) => ({
   },
 }));
 
+/**
+ * Section wrapper component for patient detail sections
+ * @param {string} title - Section title
+ * @param {ReactNode} icon - Icon component
+ * @param {ReactNode} children - Section content
+ */
 const DetailSection = ({ title, icon, children }) => (
   <Box sx={{ mb: 3 }}>
     <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
@@ -70,6 +83,12 @@ const DetailSection = ({ title, icon, children }) => (
   </Box>
 );
 
+/**
+ * Individual detail item component
+ * @param {string} label - Field label
+ * @param {string|number} value - Field value
+ * @param {ReactNode} icon - Optional icon component
+ */
 const DetailItem = ({ label, value, icon }) => (
   <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
     {icon && <Box sx={{ mr: 1, color: "primary.main" }}>{icon}</Box>}
@@ -82,13 +101,23 @@ const DetailItem = ({ label, value, icon }) => (
   </Box>
 );
 
-const BedCard = ({ bed, assignBed, deassignBed }) => {
+/**
+ * Bed card component displaying bed status and patient information
+ * Supports viewing patient details, recording vitals, and discharging patients
+ * @param {Object} bed - Bed object with patient information
+ * @param {Function} [assignBed] - Callback to assign a patient to this bed
+ * @param {Function} [deassignBed] - Callback to discharge patient from this bed
+ */
+const BedCard = ({ bed, assignBed, deassignBed, onUrgentAssign }) => {
   const [dischargeDialogOpen, setDischargeDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [vitalsFormOpen, setVitalsFormOpen] = useState(false);
   const [documentsDialogOpen, setDocumentsDialogOpen] = useState(false);
+  const [updateIncompleteDialogOpen, setUpdateIncompleteDialogOpen] = useState(false);
   const [latestVitals, setLatestVitals] = useState(null);
   const [loadingVitals, setLoadingVitals] = useState(false);
+  const dispatch = useDispatch();
+  const token = useSelector((state) => state.auth.token);
 
   const handleDeassignClick = (bed) => {
     if (deassignBed) {
@@ -102,7 +131,6 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
 
   const handleDischargeSuccess = () => {
     setDischargeDialogOpen(false);
-    // Call the parent's deassignBed function to refresh the bed data
     if (deassignBed) {
       deassignBed(bed);
     }
@@ -114,6 +142,28 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
 
   const handleVitalsFormClose = () => {
     setVitalsFormOpen(false);
+  };
+
+  const handleVitalsFormSave = () => {
+    if (patient?.id) {
+      fetchLatestVitals();
+    }
+  };
+
+  const handleUpdateIncompleteClick = () => {
+    setUpdateIncompleteDialogOpen(true);
+  };
+
+  const handleUpdateIncompleteClose = () => {
+    setUpdateIncompleteDialogOpen(false);
+  };
+
+  const handleUpdateIncompleteSuccess = async () => {
+    // Refresh bed data to get updated patient status
+    if (onUrgentAssign) {
+      await onUrgentAssign();
+    }
+    fetchLatestVitals();
   };
 
   const fetchLatestVitals = async () => {
@@ -138,19 +188,68 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
   const handleCardClick = () => {
     if (isOccupied && patient) {
       setDetailDialogOpen(true);
-      fetchLatestVitals();
+    }
+  };
+
+  const handlePatientDetailsUpdate = async () => {
+    // Refresh bed data after patient details update
+    if (onUrgentAssign) {
+      await onUrgentAssign();
+    }
+    fetchLatestVitals();
+  };
+
+  const handleUrgentAssign = async () => {
+    try {
+      const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
+      const response = await axios.post(
+        `${BASE_URL}/beds/assign`,
+        {
+          patientData: {
+            bedId: bed.id,
+            isUrgentAdmission: true,
+            department: "HDU",
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      dispatch(
+        showToast({
+          message: response.data.msg || "Urgent patient assigned successfully",
+          type: "success",
+        })
+      );
+
+      if (onUrgentAssign) {
+        await onUrgentAssign();
+      }
+    } catch (error) {
+      dispatch(
+        showToast({
+          message: error.response?.data?.msg || "Failed to assign urgent patient",
+          type: "error",
+        })
+      );
+      console.error("Error assigning urgent patient:", error);
     }
   };
 
   const isOccupied = bed.patientId !== null;
   const patient = bed.Patient;
+  const isIncomplete = patient?.isIncomplete === true;
 
   return (
     <>
       <StyledCard occupied={isOccupied} onClick={handleCardClick}>
-        <CardContent sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+        <CardContent sx={{ flexGrow: 1, display: "flex", flexDirection: "column", pt: 1.5, pb: 1.5, px: 1.5 }}>
           {/* Bed Header */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 0 }}>
             <Typography variant="h6" component="div" color="primary">
               Bed {bed.bedNumber}
             </Typography>
@@ -164,14 +263,24 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
           {isOccupied && patient ? (
             <>
               {/* Patient Avatar and Basic Info */}
-              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                <Avatar sx={{ bgcolor: "primary.main", mr: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                <Avatar sx={{ bgcolor: "primary.main", mr: 1.5 }}>
                   <Person />
                 </Avatar>
                 <Box>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {patient.fullName}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      {patient.fullName}
+                    </Typography>
+                    {isIncomplete && (
+                      <Chip
+                        label="Incomplete"
+                        size="small"
+                        color="warning"
+                        sx={{ fontSize: "10px", height: "20px" }}
+                      />
+                    )}
+                  </Box>
                   <Typography variant="body2" color="text.secondary">
                     ID: {patient.patientNumber}
                   </Typography>
@@ -179,51 +288,59 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
               </Box>
 
               {/* Patient Details */}
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <Box sx={{ mb: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Wc sx={{ fontSize: "16px", color: "primary.main" }} />
                   <Typography variant="body2">
                     <strong>Gender:</strong> {patient.gender}
                   </Typography>
                 </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <Phone sx={{ fontSize: "16px", color: "primary.main" }} />
-                  <Typography variant="body2">
-                    <strong>Contact:</strong> {patient.contactNumber}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                  <CalendarToday sx={{ fontSize: "16px", color: "primary.main" }} />
-                  <Typography variant="body2">
-                    <strong>DOB:</strong> {patient.dateOfBirth}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <LocationOn sx={{ fontSize: "16px", color: "primary.main" }} />
-                  <Typography variant="body2">
-                    <strong>Address:</strong> {patient.address}
-                  </Typography>
-                </Box>
               </Box>
 
-              {/* Click hint for occupied beds */}
-              <Box sx={{ textAlign: "center", mb: 2 }}>
-                <Typography variant="caption" color="primary" sx={{ fontStyle: "italic" }}>
-                  Click to view full details
-                </Typography>
-              </Box>
-
-              {/* Action Buttons - Fixed at bottom */}
+              {/* Action Buttons */}
               <Box
                 sx={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 1,
+                  gap: 1.5,
                   width: "100%",
-                  mt: "auto",
-                  pt: 2
+                  mt: 1
                 }}
               >
+                {/* View Details Button */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  fullWidth
+                  sx={{
+                    textTransform: "none",
+                    fontSize: "14px",
+                    fontWeight: "500",
+                    borderRadius: "6px",
+                    backgroundColor: "#3498db",
+                    color: "white",
+                    paddingX: 2.5,
+                    paddingY: 1.2,
+                    boxShadow: "none",
+                    border: "none",
+                    "&:hover": {
+                      backgroundColor: "#2980b9",
+                      boxShadow: "0 2px 8px rgba(52, 152, 219, 0.3)",
+                      transform: "none",
+                    },
+                    "&:active": {
+                      backgroundColor: "#21618c",
+                      transform: "none",
+                    },
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCardClick();
+                  }}
+                >
+                  View Full Details
+                </Button>
                 <Tooltip title="Discharge patient with medical documentation" placement="top">
                   {deassignBed && (
                     <Button
@@ -263,6 +380,45 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
                     </Button>
                   )}
                 </Tooltip>
+                {isIncomplete && (
+                  <Tooltip title="Complete patient information" placement="top">
+                    <Button
+                      variant="contained"
+                      size="medium"
+                      aria-label="Update incomplete patient"
+                      sx={{
+                        textTransform: "none",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        borderRadius: "6px",
+                        backgroundColor: "#f39c12",
+                        color: "white",
+                        paddingX: 2.5,
+                        paddingY: 1.2,
+                        boxShadow: "none",
+                        border: "none",
+                        "&:hover": {
+                          backgroundColor: "#e67e22",
+                          boxShadow: "0 2px 8px rgba(243, 156, 18, 0.3)",
+                          transform: "none",
+                        },
+                        "&:active": {
+                          backgroundColor: "#d35400",
+                          transform: "none",
+                        },
+                        width: "100%",
+                        transition: "all 0.2s ease",
+                      }}
+                      startIcon={<Info sx={{ fontSize: "18px" }} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdateIncompleteClick();
+                      }}
+                    >
+                      Complete Patient Info
+                    </Button>
+                  </Tooltip>
+                )}
                 <Tooltip title="Update patient vital signs and medical data" placement="top">
                   <Button
                     variant="contained"
@@ -329,258 +485,86 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
                 </Typography>
               </Box>
 
-              {/* Assign Patient Button - Only show if assignBed function is provided */}
+              {/* Assign Patient Buttons - Only show if assignBed function is provided */}
               {assignBed && (
-                <Tooltip title="Assign a new patient to this bed" placement="top">
-                  <Button
-                    variant="contained"
-                    size="medium"
-                    aria-label="Assign patient to bed"
-                    sx={{
-                      textTransform: "none",
-                      fontSize: "14px",
-                      fontWeight: "500",
-                      borderRadius: "6px",
-                      backgroundColor: "#3498db",
-                      color: "white",
-                      paddingX: 2.5,
-                      paddingY: 1.2,
-                      boxShadow: "none",
-                      border: "none",
-                      "&:hover": {
-                        backgroundColor: "#2980b9",
-                        boxShadow: "0 2px 8px rgba(52, 152, 219, 0.3)",
-                        transform: "none",
-                      },
-                      "&:active": {
-                        backgroundColor: "#21618c",
-                        transform: "none",
-                      },
-                      transition: "all 0.2s ease",
-                    }}
-                    startIcon={<Hotel sx={{ fontSize: "18px" }} />}
-                    onClick={() => assignBed(bed)}
-                  >
-                    Assign Patient
-                  </Button>
-                </Tooltip>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, width: "100%" }}>
+                  <Tooltip title="Assign a new patient to this bed with full details" placement="top">
+                    <Button
+                      variant="contained"
+                      size="medium"
+                      aria-label="Assign patient to bed"
+                      sx={{
+                        textTransform: "none",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        borderRadius: "6px",
+                        backgroundColor: "#3498db",
+                        color: "white",
+                        paddingX: 2.5,
+                        paddingY: 1.2,
+                        boxShadow: "none",
+                        border: "none",
+                        "&:hover": {
+                          backgroundColor: "#2980b9",
+                          boxShadow: "0 2px 8px rgba(52, 152, 219, 0.3)",
+                          transform: "none",
+                        },
+                        "&:active": {
+                          backgroundColor: "#21618c",
+                          transform: "none",
+                        },
+                        transition: "all 0.2s ease",
+                      }}
+                      startIcon={<Hotel sx={{ fontSize: "18px" }} />}
+                      onClick={() => assignBed(bed)}
+                    >
+                      Assign Patient
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="Urgent admission - Assign patient immediately without data entry" placement="top">
+                    <Button
+                      variant="outlined"
+                      size="medium"
+                      aria-label="Urgent assign patient"
+                      sx={{
+                        textTransform: "none",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        borderRadius: "6px",
+                        borderColor: "#e74c3c",
+                        color: "#e74c3c",
+                        paddingX: 2.5,
+                        paddingY: 1.2,
+                        "&:hover": {
+                          borderColor: "#c0392b",
+                          backgroundColor: "rgba(231, 76, 60, 0.1)",
+                          transform: "none",
+                        },
+                        transition: "all 0.2s ease",
+                      }}
+                      startIcon={<Emergency sx={{ fontSize: "18px" }} />}
+                      onClick={handleUrgentAssign}
+                    >
+                      Urgent Admission
+                    </Button>
+                  </Tooltip>
+                </Box>
               )}
             </>
           )}
         </CardContent>
       </StyledCard>
 
-      {/* Patient Details Dialog */}
-      <Dialog
-        open={detailDialogOpen}
-        onClose={() => setDetailDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-          }
-        }}
-      >
-        <DialogTitle sx={{ m: 0, p: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <Person sx={{ mr: 1, color: "primary.main" }} />
-            <Typography variant="h6">Patient Details - Bed {bed.bedNumber}</Typography>
-          </Box>
-          <IconButton
-            aria-label="close"
-            onClick={() => setDetailDialogOpen(false)}
-            sx={{ color: "grey.500" }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          {patient && (
-            <Grid container spacing={3}>
-              {/* Basic Information */}
-              <Grid item xs={12} md={6}>
-                <DetailSection title="Basic Information" icon={<Person sx={{ color: "primary.main" }} />}>
-                  <DetailItem label="Full Name" value={patient.fullName} />
-                  <DetailItem label="Patient ID" value={patient.patientNumber} />
-                  <DetailItem label="Gender" value={patient.gender} />
-                  <DetailItem label="Date of Birth" value={patient.dateOfBirth} />
-                  <DetailItem label="Age" value={patient.age} />
-                  <DetailItem label="Marital Status" value={patient.maritalStatus} />
-                  <DetailItem label="Contact Number" value={patient.contactNumber} icon={<Phone sx={{ fontSize: "16px" }} />} />
-                  <DetailItem label="Email" value={patient.email} icon={<Email sx={{ fontSize: "16px" }} />} />
-                  <DetailItem label="Address" value={patient.address} icon={<LocationOn sx={{ fontSize: "16px" }} />} />
-                </DetailSection>
-              </Grid>
-
-              {/* Medical Information */}
-              <Grid item xs={12} md={6}>
-                <DetailSection title="Medical Information" icon={<MedicalServices sx={{ color: "primary.main" }} />}>
-                  <DetailItem label="Blood Type" value={patient.bloodType} icon={<Bloodtype sx={{ fontSize: "16px" }} />} />
-                  <DetailItem label="Known Allergies" value={patient.knownAllergies} icon={<Warning sx={{ fontSize: "16px" }} />} />
-                  <DetailItem label="Medical History" value={patient.medicalHistory} icon={<History sx={{ fontSize: "16px" }} />} />
-                  <DetailItem label="Current Medications" value={patient.currentMedications} icon={<Medication sx={{ fontSize: "16px" }} />} />
-                  <DetailItem label="Pregnancy Status" value={patient.pregnancyStatus} icon={<PregnantWoman sx={{ fontSize: "16px" }} />} />
-                </DetailSection>
-              </Grid>
-
-              {/* Critical Details */}
-              <Grid item xs={12}>
-                <DetailSection title="Critical Details" icon={<Emergency sx={{ color: "error.main" }} />}>
-                  {loadingVitals ? (
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                      <CircularProgress size={24} />
-                    </Box>
-                  ) : latestVitals ? (
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Heart Rate" 
-                          value={`${latestVitals.heartRate} bpm`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Blood Pressure" 
-                          value={`${latestVitals.bloodPressureSystolic}/${latestVitals.bloodPressureDiastolic} mmHg`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Temperature" 
-                          value={`${latestVitals.temperature} °C`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="SpO2" 
-                          value={`${latestVitals.spO2}%`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Respiratory Rate" 
-                          value={`${latestVitals.respiratoryRate} breaths/min`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Glasgow Coma Scale" 
-                          value={latestVitals.glasgowComaScale} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Pain Scale" 
-                          value={`${latestVitals.painScale}/10`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Blood Glucose" 
-                          value={`${latestVitals.bloodGlucose} mg/dL`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={3}>
-                        <DetailItem 
-                          label="Urine Output" 
-                          value={`${latestVitals.urineOutput} mL/kg/hr`} 
-                          icon={<AssignmentIcon sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <DetailItem 
-                          label="Last Updated" 
-                          value={latestVitals.recordedAt ? new Date(latestVitals.recordedAt).toLocaleString() : "Not available"} 
-                          icon={<History sx={{ fontSize: "16px" }} />} 
-                        />
-                      </Grid>
-                    </Grid>
-                  ) : (
-                    <Box sx={{ textAlign: "center", py: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        No vital signs recorded yet. Click "Update Vitals" to record the first reading.
-                      </Typography>
-                    </Box>
-                  )}
-                </DetailSection>
-              </Grid>
-
-              {/* Emergency Contact */}
-              <Grid item xs={12}>
-                <DetailSection title="Emergency Contact" icon={<ContactEmergency sx={{ color: "primary.main" }} />}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={4}>
-                      <DetailItem label="Contact Name" value={patient.emergencyContactName} />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <DetailItem label="Relationship" value={patient.emergencyContactRelationship} />
-                    </Grid>
-                    <Grid item xs={12} md={4}>
-                      <DetailItem label="Contact Number" value={patient.emergencyContactNumber} icon={<Phone sx={{ fontSize: "16px" }} />} />
-                    </Grid>
-                  </Grid>
-                </DetailSection>
-              </Grid>
-
-              {/* Admission Information */}
-              <Grid item xs={12}>
-                <DetailSection title="Admission Information" icon={<Info sx={{ color: "primary.main" }} />}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <DetailItem label="Admission Date" value={patient.admissionDateTime} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <DetailItem label="Department" value={patient.department} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <DetailItem label="Initial Diagnosis" value={patient.initialDiagnosis} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <DetailItem label="Consultant in Charge" value={patient.consultantInCharge} />
-                    </Grid>
-                  </Grid>
-                </DetailSection>
-              </Grid>
-            </Grid>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
-          <Button
-            onClick={() => setDocumentsDialogOpen(true)}
-            variant="contained"
-            sx={{
-              textTransform: "none",
-              borderRadius: "6px",
-              bgcolor: "primary.main",
-              "&:hover": {
-                bgcolor: "primary.dark",
-              },
-            }}
-          >
-            View Documents
-          </Button>
-          <Button
-            onClick={() => setDetailDialogOpen(false)}
-            variant="outlined"
-            sx={{
-              textTransform: "none",
-              borderRadius: "6px",
-            }}
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Patient Details Dialog - Always available for viewing and editing */}
+      {patient && (
+        <PatientDetailsDialog
+          open={detailDialogOpen}
+          onClose={() => setDetailDialogOpen(false)}
+          patient={patient}
+          bedNumber={bed.bedNumber}
+          onUpdate={handlePatientDetailsUpdate}
+        />
+      )}
 
       {/* Discharge Dialog */}
       <DischargeDialog
@@ -596,6 +580,7 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
         <CriticalFactorsForm
           open={vitalsFormOpen}
           onClose={handleVitalsFormClose}
+          onSave={handleVitalsFormSave}
           patientId={patient.id}
           bedNumber={bed.bedNumber}
         />
@@ -607,6 +592,15 @@ const BedCard = ({ bed, assignBed, deassignBed }) => {
           open={documentsDialogOpen}
           onClose={() => setDocumentsDialogOpen(false)}
           patientId={patient.id}
+        />
+      )}
+
+      {patient && isIncomplete && (
+        <UpdateIncompletePatientDialog
+          open={updateIncompleteDialogOpen}
+          onClose={handleUpdateIncompleteClose}
+          patientId={patient.id}
+          onUpdate={handleUpdateIncompleteSuccess}
         />
       )}
     </>
